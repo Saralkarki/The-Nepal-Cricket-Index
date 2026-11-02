@@ -1,0 +1,54 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Player Profiles · Nepal Cricket Dashboard{% endblock %}
+
+{% block content %}
+<section class="page-section player-directory">
+    <header class="player-page-heading">
+        <p class="eyebrow section-eyebrow">Nepal Premier League</p>
+        <h1>Player profiles</h1>
+        <p class="section-intro">Explore player records, season statistics and match-by-match performances.</p>
+    </header>
+
+    <form class="player-search" method="get" action="{% url 'cricket_nepal:players' %}">
+        <label for="player-search">Search by player name</label>
+        <div class="player-search-controls">
+            <input id="player-search" type="search" name="q" value="{{ search_term }}" placeholder="Enter a player name">
+            <button type="submit">Search</button>
+            {% if search_term %}<a href="{% url 'cricket_nepal:players' %}">Clear</a>{% endif %}
+        </div>
+    </form>
+
+    <div class="player-directory-heading">
+        <h2>{% if search_term %}Search results{% else %}All players{% endif %}</h2>
+        <span>{{ players|length }} player{{ players|length|pluralize }}</span>
+    </div>
+
+    {% if players %}
+    <div class="player-directory-list">
+        {% for player in players %}
+        <article class="player-directory-row">
+            <div>
+                <h3><a href="{% url 'cricket_nepal:player_profile' player.player_id %}">{{ player.player_name }}</a></h3>
+                {% if player.participations %}
+                <ul class="player-participation-list">
+                    {% for participation in player.participations %}
+                    <li>
+                        <span>{{ participation.season }}</span>
+                        {% if participation.teams %} · {{ participation.teams|join:", " }}{% else %} · Team not recorded{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="player-muted">No tournament participation recorded.</p>
+                {% endif %}
+            </div>
+            <a class="player-open-link" href="{% url 'cricket_nepal:player_profile' player.player_id %}" aria-label="View {{ player.player_name }} profile">View profile <span aria-hidden="true">→</span></a>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="player-empty-state">No players match “{{ search_term }}”.</p>
+    {% endif %}
+</section>
+{% endblock %}

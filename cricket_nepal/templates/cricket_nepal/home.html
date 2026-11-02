@@ -48,12 +48,12 @@
             <p class="section-intro">The essential numbers, brought together in one place.</p>
         </div>
         <form class="season-form" method="get" action="{% url 'cricket_nepal:home' %}">
-            <label for="season">Tournament season</label>
+            <label for="tournament_id">Tournament season</label>
             <div class="season-form-controls">
-                <select id="season" name="season">
-                    {% for season in seasons %}
-                    <option value="{{ season.year }}"{% if season.year == selected_year %} selected{% endif %}>
-                        {{ season.name }} ({{ season.year }})
+                <select id="tournament_id" name="tournament_id">
+                    {% for tournament in tournaments %}
+                    <option value="{{ tournament.tournament_id }}"{% if tournament.tournament_id == selected_tournament.tournament_id %} selected{% endif %}>
+                        {{ tournament.tournament_name }} ({{ tournament.season }})
                     </option>
                     {% endfor %}
                 </select>
@@ -63,30 +63,56 @@
     </div>
 
     <p class="selected-season-note">
-        Showing the overview for <strong>{{ selected_season.label }}</strong>.
-        Verified statistics will appear here when the data layer is connected.
+        Showing the overview for
+        <strong>{{ selected_tournament.tournament_name }} · {{ selected_tournament.season }}</strong>.
+        Season statistics from the verified match and tournament records.
     </p>
 
     <div class="stats-grid" aria-label="Season statistics">
         <article class="stat-item">
             <p class="stat-label">Matches</p>
-            <p class="stat-value" aria-label="Not available yet">—</p>
+            <p class="stat-value">{{ overview.matches_played }}</p>
             <p class="stat-note">Season match count</p>
         </article>
         <article class="stat-item">
-            <p class="stat-label">Players</p>
-            <p class="stat-value" aria-label="Not available yet">—</p>
-            <p class="stat-note">Players featured</p>
-        </article>
-        <article class="stat-item">
             <p class="stat-label">Teams</p>
-            <p class="stat-value" aria-label="Not available yet">—</p>
-            <p class="stat-note">Teams competing</p>
+            <p class="stat-value">{{ overview.teams_count }}</p>
+            <p class="stat-note">Participating teams</p>
         </article>
         <article class="stat-item">
-            <p class="stat-label">Season</p>
-            <p class="stat-value stat-season">{{ selected_year }}</p>
-            <p class="stat-note">Nepal Premier League</p>
+            <p class="stat-label">Players</p>
+            <p class="stat-value">{{ overview.players_count }}</p>
+            <p class="stat-note">Tournament participants</p>
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Runs scored</p>
+            <p class="stat-value">{{ overview.total_runs }}</p>
+            <p class="stat-note">Across all innings</p>
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Wickets</p>
+            <p class="stat-value">{{ overview.total_wickets }}</p>
+            <p class="stat-note">Taken by bowlers</p>
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Leading run-scorer</p>
+            {% if overview.leading_run_scorer %}
+            <p class="stat-value stat-leader">{{ overview.leading_run_scorer.player_name }}</p>
+            <p class="stat-note">{{ overview.leading_run_scorer.total_runs }} runs</p>
+            {% else %}
+            <p class="stat-value">—</p>
+            <p class="stat-note">No batting statistics available</p>
+            {% endif %}
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Leading wicket-taker</p>
+            {% if overview.leading_wicket_taker %}
+            <p class="stat-value stat-leader">{{ overview.leading_wicket_taker.player_name }}</p>
+            <p class="stat-note">{{ overview.leading_wicket_taker.wickets }} wickets</p>
+            {% else %}
+            <p class="stat-value">—</p>
+            <p class="stat-note">No bowling statistics available</p>
+            {% endif %}
         </article>
     </div>
 </section>
@@ -107,7 +133,7 @@
             <span class="feature-index">01</span>
             <h3>Matches</h3>
             <p>Results, scorecards and the moments that shaped each fixture.</p>
-            <span class="feature-status">Statistics coming soon</span>
+            <a class="feature-status feature-action" href="{% url 'cricket_nepal:matches' %}">Browse matches <span aria-hidden="true">→</span></a>
         </article>
         <article class="feature-item" id="players">
             <span class="feature-index">02</span>

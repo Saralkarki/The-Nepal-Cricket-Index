@@ -1,0 +1,89 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Matches · Nepal Cricket Dashboard{% endblock %}
+
+{% block content %}
+<section class="page-section matches-page">
+    <div class="matches-heading">
+        <p class="eyebrow section-eyebrow">Nepal Premier League · Match archive</p>
+        <h1>Matches</h1>
+        <p class="section-intro">
+            Results and match details for {{ selected_tournament.tournament_name }}
+            {{ selected_tournament.season }}.
+        </p>
+    </div>
+
+    <form class="match-filters" method="get" action="{% url 'cricket_nepal:matches' %}">
+        <div class="filter-field">
+            <label for="tournament_id">Tournament</label>
+            <select id="tournament_id" name="tournament_id">
+                {% for tournament in tournaments %}
+                <option value="{{ tournament.tournament_id }}"{% if tournament.tournament_id == selected_tournament.tournament_id %} selected{% endif %}>
+                    {{ tournament.tournament_name }} ({{ tournament.season }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="team">Team <span class="filter-optional">optional</span></label>
+            <select id="team" name="team">
+                <option value="">All teams</option>
+                {% for team in teams %}
+                <option value="{{ team }}"{% if team == selected_team %} selected{% endif %}>{{ team }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit">Apply filters</button>
+    </form>
+
+    <div class="match-list-heading">
+        <h2>{{ matches|length }} match{{ matches|length|pluralize:"es" }}</h2>
+        <p>Latest matches first</p>
+    </div>
+
+    {% if matches %}
+    <ol class="match-list">
+        {% for match in matches %}
+        <li class="match-list-item">
+            <a class="match-row" href="{% url 'cricket_nepal:match_detail' match.match_id %}">
+                <div class="match-date">
+                    <span class="match-date-label">Match date</span>
+                    <time datetime="{{ match.match_date }}">{{ match.match_date }}</time>
+                </div>
+                <div class="match-teams">
+                    <span>{{ match.team_1_name }}</span>
+                    <span class="match-versus" aria-label="versus">v</span>
+                    <span>{{ match.team_2_name }}</span>
+                </div>
+                <div class="match-result">
+                    <span class="match-date-label">Result</span>
+                    {% if match.winner_name %}
+                    <span class="match-winner">{{ match.winner_name }} won</span>
+                    {% if match.margin and match.margin_type %}
+                    <span class="match-margin">by {{ match.margin }} {{ match.margin_type }}</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="match-no-result">Result unavailable</span>
+                    {% endif %}
+                </div>
+                <div class="match-venue">
+                    <span class="match-date-label">Venue</span>
+                    <span>{{ match.venue_name|default:"Venue unavailable" }}</span>
+                </div>
+                <div class="match-player">
+                    <span class="match-date-label">Player of the match</span>
+                    <span>{{ match.player_of_match|default:"Not recorded" }}</span>
+                </div>
+                <span class="match-open" aria-hidden="true">View match <span>→</span></span>
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <div class="match-empty-state">
+        <h2>No matches found</h2>
+        <p>There are no matches for this tournament and team selection.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

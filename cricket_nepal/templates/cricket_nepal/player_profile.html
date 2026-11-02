@@ -1,0 +1,198 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}{{ profile.player_name }} · Player Profile{% endblock %}
+
+{% block content %}
+<section class="page-section player-profile">
+    <a class="match-back-link" href="{% url 'cricket_nepal:players' %}">← Player profiles</a>
+
+    <header class="player-page-heading profile-heading">
+        <p class="eyebrow section-eyebrow">Player profile</p>
+        <h1>{{ profile.player_name }}</h1>
+    </header>
+
+    <section class="player-information" aria-label="Player information">
+        <div>
+            <p class="player-info-label">Teams and seasons</p>
+            {% if profile.participations %}
+            <ul class="profile-participations">
+                {% for participation in profile.participations %}
+                <li><strong>{{ participation.season }}</strong><span>{% if participation.teams %}{{ participation.teams|join:", " }}{% else %}Team not recorded{% endif %}</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="player-muted">No tournament participation recorded.</p>
+            {% endif %}
+        </div>
+        <div>
+            <p class="player-info-label">Matches played</p>
+            <p class="player-match-count">{{ profile.matches_played }}</p>
+            <span class="player-muted">Across available scorecards</span>
+        </div>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="overall-stats-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Career summary</p>
+                <h2 id="overall-stats-heading">Overall statistics</h2>
+            </div>
+            <span class="player-muted">Combined across available seasons</span>
+        </div>
+
+        <div class="player-stat-groups">
+            <section class="player-stat-group">
+                <h3>Batting</h3>
+                {% if profile.has_batting_stats %}
+                <dl class="player-stat-grid">
+                    <div><dt>Runs</dt><dd>{{ profile.overall.batting.runs|default_if_none:"—" }}</dd></div>
+                    <div><dt>Average</dt><dd>{{ profile.overall.batting.average|floatformat:2|default:"—" }}</dd></div>
+                    <div><dt>Strike rate</dt><dd>{{ profile.overall.batting.strike_rate|floatformat:2|default:"—" }}</dd></div>
+                    <div><dt>Highest score</dt><dd>{{ profile.overall.batting.highest_score|default_if_none:"—" }}</dd></div>
+                    <div><dt>Fours</dt><dd>{{ profile.overall.batting.fours|default_if_none:"—" }}</dd></div>
+                    <div><dt>Sixes</dt><dd>{{ profile.overall.batting.sixes|default_if_none:"—" }}</dd></div>
+                    <div><dt>Dot balls</dt><dd>{{ profile.overall.batting.dot_balls|default_if_none:"—" }}</dd></div>
+                    <div><dt>Dot-ball %</dt><dd>{{ profile.overall.batting.dot_ball_percentage|floatformat:2|default:"—" }}</dd></div>
+                </dl>
+                {% else %}
+                <p class="player-muted">No batting statistics available.</p>
+                {% endif %}
+            </section>
+
+            <section class="player-stat-group">
+                <h3>Bowling</h3>
+                {% if profile.has_bowling_stats %}
+                <dl class="player-stat-grid">
+                    <div><dt>Wickets</dt><dd>{{ profile.overall.bowling.wickets|default_if_none:"—" }}</dd></div>
+                    <div><dt>Average</dt><dd>{{ profile.overall.bowling.average|floatformat:2|default:"—" }}</dd></div>
+                    <div><dt>Economy</dt><dd>{{ profile.overall.bowling.economy|floatformat:2|default:"—" }}</dd></div>
+                    <div><dt>Strike rate</dt><dd>{{ profile.overall.bowling.strike_rate|floatformat:2|default:"—" }}</dd></div>
+                    <div><dt>Maidens</dt><dd>{{ profile.overall.bowling.maidens|default_if_none:"—" }}</dd></div>
+                    <div><dt>Dot balls</dt><dd>{{ profile.overall.bowling.dot_balls|default_if_none:"—" }}</dd></div>
+                    <div><dt>Dot-ball %</dt><dd>{{ profile.overall.bowling.dot_ball_percentage|floatformat:2|default:"—" }}</dd></div>
+                </dl>
+                {% else %}
+                <p class="player-muted">No bowling statistics available.</p>
+                {% endif %}
+            </section>
+        </div>
+    </section>
+
+    {% if profile.display_season_stats %}
+    <section class="player-stats-section" aria-labelledby="season-stats-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Tournament records</p>
+                <h2 id="season-stats-heading">Season statistics</h2>
+            </div>
+        </div>
+        {% for stats in profile.display_season_stats %}
+        <article class="player-season-card">
+            <h3>{{ stats.season }} <span>{{ stats.matches_played }} matches</span></h3>
+            <div class="player-season-columns">
+                <div>
+                    <h4>Batting</h4>
+                    {% if stats.has_batting_stats %}
+                    <dl class="season-stat-list">
+                        <div><dt>Runs</dt><dd>{{ stats.total_runs }}</dd></div>
+                        <div><dt>Average</dt><dd>{{ stats.batting_average|floatformat:2|default:"—" }}</dd></div>
+                        <div><dt>Strike rate</dt><dd>{{ stats.batting_strike_rate|floatformat:2|default:"—" }}</dd></div>
+                        <div><dt>Highest score</dt><dd>{{ stats.highest_score|default_if_none:"—" }}</dd></div>
+                        <div><dt>Fours / sixes</dt><dd>{{ stats.total_fours|default_if_none:"—" }} / {{ stats.total_sixes|default_if_none:"—" }}</dd></div>
+                        <div><dt>Dot balls</dt><dd>{{ stats.total_dot_balls|default_if_none:"—" }}</dd></div>
+                        <div><dt>Dot-ball %</dt><dd>{{ stats.dot_ball_percentage|floatformat:2|default:"—" }}</dd></div>
+                    </dl>
+                    {% else %}
+                    <p class="player-muted">No batting statistics for this season.</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <h4>Bowling</h4>
+                    {% if stats.has_bowling_stats %}
+                    <dl class="season-stat-list">
+                        <div><dt>Wickets</dt><dd>{{ stats.wickets }}</dd></div>
+                        <div><dt>Average</dt><dd>{{ stats.bowling_average|floatformat:2|default:"—" }}</dd></div>
+                        <div><dt>Economy</dt><dd>{{ stats.economy_rate|floatformat:2|default:"—" }}</dd></div>
+                        <div><dt>Strike rate</dt><dd>{{ stats.bowling_strike_rate|floatformat:2|default:"—" }}</dd></div>
+                        <div><dt>Maidens</dt><dd>{{ stats.maidens|default_if_none:"—" }}</dd></div>
+                        <div><dt>Dot balls</dt><dd>{{ stats.bowling_dot_balls|default_if_none:"—" }}</dd></div>
+                        <div><dt>Dot-ball %</dt><dd>{{ stats.bowling_dot_ball_percentage|floatformat:2|default:"—" }}</dd></div>
+                    </dl>
+                    {% else %}
+                    <p class="player-muted">No bowling statistics for this season.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="player-stats-section" aria-labelledby="performance-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Scorecard records</p>
+                <h2 id="performance-heading">Match-by-match performance</h2>
+            </div>
+        </div>
+        <form class="player-season-filter" method="get">
+            <label for="season-filter">Season</label>
+            <select id="season-filter" name="season_id">
+                <option value="">All seasons</option>
+                {% for participation in profile.participations %}
+                <option value="{{ participation.tournament_id }}"{% if selected_season.tournament_id == participation.tournament_id %} selected{% endif %}>{{ participation.season }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+        </form>
+
+        <div class="player-performance-group">
+            <h3>Batting</h3>
+            {% if performance.batting %}
+            <div class="player-table-wrap">
+                <table class="player-performance-table">
+                    <thead><tr><th>Date</th><th>Season</th><th>Opponent</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>Dismissal</th></tr></thead>
+                    <tbody>
+                        {% for row in performance.batting %}
+                        <tr>
+                            <td><a href="{% url 'cricket_nepal:match_detail' row.match_id %}">{{ row.match_date }}</a></td>
+                            <td>{{ row.season }}</td><td>{{ row.opponent|default:"—" }}</td>
+                            <td>{{ row.runs }}</td><td>{{ row.balls_faced }}</td><td>{{ row.fours }}</td><td>{{ row.sixes }}</td>
+                            <td>{{ row.strike_rate|floatformat:2|default:"—" }}</td>
+                            <td>{% if row.is_out %}{{ row.dismissal_type|default:"out" }}{% if row.dismissed_by_bowler %} b {{ row.dismissed_by_bowler }}{% endif %}{% if row.dismissed_by_fielder %} ({{ row.dismissed_by_fielder }}){% endif %}{% else %}not out{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="player-muted">No batting performances for this selection.</p>
+            {% endif %}
+        </div>
+
+        <div class="player-performance-group">
+            <h3>Bowling</h3>
+            {% if performance.bowling %}
+            <div class="player-table-wrap">
+                <table class="player-performance-table">
+                    <thead><tr><th>Date</th><th>Season</th><th>Opponent</th><th>Overs</th><th>M</th><th>Runs</th><th>Wickets</th><th>Economy</th><th>Dot balls</th><th>Dot-ball %</th></tr></thead>
+                    <tbody>
+                        {% for row in performance.bowling %}
+                        <tr>
+                            <td><a href="{% url 'cricket_nepal:match_detail' row.match_id %}">{{ row.match_date }}</a></td>
+                            <td>{{ row.season }}</td><td>{{ row.opponent|default:"—" }}</td>
+                            <td>{{ row.overs_bowled }}</td><td>{{ row.maidens }}</td><td>{{ row.runs_conceded }}</td><td>{{ row.wickets }}</td>
+                            <td>{{ row.economy|floatformat:2|default:"—" }}</td><td>{{ row.dot_balls }}</td>
+                            <td>{{ row.dot_ball_percentage|floatformat:2|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="player-muted">No bowling performances for this selection.</p>
+            {% endif %}
+        </div>
+    </section>
+</section>
+{% endblock %}

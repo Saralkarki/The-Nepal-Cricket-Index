@@ -47,6 +47,7 @@ SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
         "match_id": "VARCHAR",
         "innings_number": "BIGINT",
         "gender": "VARCHAR",
+        "batting_team": "VARCHAR",
         "total_runs": "DOUBLE",
         "total_wickets": "BIGINT",
         "legal_balls": "BIGINT",
@@ -60,6 +61,8 @@ SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
         "gender": "VARCHAR",
         "runs": "DOUBLE",
         "balls_faced": "BIGINT",
+        "dot_balls": "BIGINT",
+        "dot_ball_percentage": "DOUBLE",
         "fours": "BIGINT",
         "sixes": "BIGINT",
         "strike_rate": "FLOAT",
@@ -79,6 +82,9 @@ SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
         "wickets": "BIGINT",
         "wides": "BIGINT",
         "no_balls": "BIGINT",
+        "maidens": "BIGINT",
+        "dot_balls": "BIGINT",
+        "dot_ball_percentage": "DOUBLE",
         "economy": "DOUBLE",
     },
     "batting_stats_by_tournament": {
@@ -94,12 +100,14 @@ SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
         "total_runs": "DOUBLE",
         "highest_score": "DOUBLE",
         "total_balls_faced": "DOUBLE",
+        "total_dot_balls": "DOUBLE",
         "total_fours": "DOUBLE",
         "total_sixes": "DOUBLE",
         "fifties": "DOUBLE",
         "hundreds": "DOUBLE",
         "batting_average": "DOUBLE",
         "batting_strike_rate": "DOUBLE",
+        "dot_ball_percentage": "DOUBLE",
     },
     "bowling_stats_by_tournament": {
         "tournament_id": "BIGINT",
@@ -111,6 +119,9 @@ SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
         "innings_bowled": "BIGINT",
         "total_legal_balls": "DOUBLE",
         "overs_bowled": "VARCHAR",
+        "maidens": "DOUBLE",
+        "total_dot_balls": "DOUBLE",
+        "dot_ball_percentage": "DOUBLE",
         "runs_conceded": "DOUBLE",
         "wickets": "DOUBLE",
         "bowling_average": "DOUBLE",
@@ -213,6 +224,7 @@ CREATE_STATEMENTS = (
         total_wickets INTEGER NOT NULL CHECK (total_wickets >= 0),
         legal_balls INTEGER NOT NULL CHECK (legal_balls >= 0),
         overs TEXT NOT NULL,
+        batting_team TEXT NOT NULL,
         PRIMARY KEY (match_id, innings_number),
         FOREIGN KEY (match_id) REFERENCES matches(match_id)
     )
@@ -233,6 +245,8 @@ CREATE_STATEMENTS = (
         dismissal_type TEXT,
         dismissed_by_bowler TEXT,
         dismissed_by_fielder TEXT,
+        dot_balls INTEGER NOT NULL CHECK (dot_balls >= 0),
+        dot_ball_percentage REAL,
         PRIMARY KEY (match_id, innings_number, batting_position),
         FOREIGN KEY (match_id, innings_number)
             REFERENCES innings_summary(match_id, innings_number),
@@ -251,6 +265,9 @@ CREATE_STATEMENTS = (
         wickets INTEGER NOT NULL CHECK (wickets >= 0),
         wides INTEGER NOT NULL CHECK (wides >= 0),
         no_balls INTEGER NOT NULL CHECK (no_balls >= 0),
+        maidens INTEGER NOT NULL CHECK (maidens >= 0),
+        dot_balls INTEGER NOT NULL CHECK (dot_balls >= 0),
+        dot_ball_percentage REAL,
         economy REAL,
         PRIMARY KEY (match_id, innings_number, player_id),
         FOREIGN KEY (match_id, innings_number)
@@ -270,12 +287,14 @@ CREATE_STATEMENTS = (
         total_runs INTEGER NOT NULL CHECK (total_runs >= 0),
         highest_score INTEGER NOT NULL CHECK (highest_score >= 0),
         total_balls_faced INTEGER NOT NULL CHECK (total_balls_faced >= 0),
+        total_dot_balls INTEGER NOT NULL CHECK (total_dot_balls >= 0),
         total_fours INTEGER NOT NULL CHECK (total_fours >= 0),
         total_sixes INTEGER NOT NULL CHECK (total_sixes >= 0),
         fifties INTEGER NOT NULL CHECK (fifties >= 0),
         hundreds INTEGER NOT NULL CHECK (hundreds >= 0),
         batting_average REAL,
         batting_strike_rate REAL,
+        dot_ball_percentage REAL,
         PRIMARY KEY (tournament_id, player_id),
         FOREIGN KEY (tournament_id) REFERENCES tournaments(tournament_id),
         FOREIGN KEY (player_id) REFERENCES players(player_id)
@@ -301,6 +320,9 @@ CREATE_STATEMENTS = (
         five_wicket_hauls INTEGER NOT NULL CHECK (five_wicket_hauls >= 0),
         wides INTEGER NOT NULL CHECK (wides >= 0),
         no_balls INTEGER NOT NULL CHECK (no_balls >= 0),
+        maidens INTEGER NOT NULL CHECK (maidens >= 0),
+        total_dot_balls INTEGER NOT NULL CHECK (total_dot_balls >= 0),
+        dot_ball_percentage REAL,
         PRIMARY KEY (tournament_id, player_id),
         FOREIGN KEY (tournament_id) REFERENCES tournaments(tournament_id),
         FOREIGN KEY (player_id) REFERENCES players(player_id)
@@ -639,6 +661,7 @@ def load_data(
             integer_value(row["total_wickets"], "innings_summary.total_wickets"),
             integer_value(row["legal_balls"], "innings_summary.legal_balls"),
             text_value(row["overs"], "innings_summary.overs"),
+            text_value(row["batting_team"], "innings_summary.batting_team"),
         )
         for row in data["innings_summary"]
     ]
@@ -647,7 +670,7 @@ def load_data(
         "innings_summary",
         (
             "match_id", "innings_number", "gender", "total_runs", "total_wickets",
-            "legal_balls", "overs",
+            "legal_balls", "overs", "batting_team",
         ),
         innings_rows,
     )
@@ -680,6 +703,12 @@ def load_data(
                 "batting_scorecards.dismissed_by_fielder",
                 nullable=True,
             ),
+            integer_value(row["dot_balls"], "batting_scorecards.dot_balls"),
+            real_value(
+                row["dot_ball_percentage"],
+                "batting_scorecards.dot_ball_percentage",
+                nullable=True,
+            ),
         )
         for row in data["batting_scorecards"]
     ]
@@ -694,6 +723,7 @@ def load_data(
             "match_id", "innings_number", "batting_position", "player_id", "gender",
             "runs", "balls_faced", "fours", "sixes", "strike_rate", "is_out",
             "dismissal_type", "dismissed_by_bowler", "dismissed_by_fielder",
+            "dot_balls", "dot_ball_percentage",
         ),
         batting_rows,
     )
@@ -713,6 +743,13 @@ def load_data(
             integer_value(row["wides"], "bowling_scorecards.wides"),
             integer_value(row["no_balls"], "bowling_scorecards.no_balls"),
             real_value(row["economy"], "bowling_scorecards.economy", nullable=True),
+            integer_value(row["maidens"], "bowling_scorecards.maidens"),
+            integer_value(row["dot_balls"], "bowling_scorecards.dot_balls"),
+            real_value(
+                row["dot_ball_percentage"],
+                "bowling_scorecards.dot_ball_percentage",
+                nullable=True,
+            ),
         )
         for row in data["bowling_scorecards"]
     ]
@@ -722,7 +759,8 @@ def load_data(
         (
             "match_id", "innings_number", "player_id", "gender",
             "legal_balls_bowled", "overs_bowled", "runs_conceded", "wickets",
-            "wides", "no_balls", "economy",
+            "wides", "no_balls", "economy", "maidens", "dot_balls",
+            "dot_ball_percentage",
         ),
         bowling_rows,
     )
@@ -746,12 +784,14 @@ def load_data(
                 integer_value(row["total_runs"], "batting_stats_by_tournament.total_runs"),
                 integer_value(row["highest_score"], "batting_stats_by_tournament.highest_score"),
                 integer_value(row["total_balls_faced"], "batting_stats_by_tournament.total_balls_faced"),
+                integer_value(row["total_dot_balls"], "batting_stats_by_tournament.total_dot_balls"),
                 integer_value(row["total_fours"], "batting_stats_by_tournament.total_fours"),
                 integer_value(row["total_sixes"], "batting_stats_by_tournament.total_sixes"),
                 integer_value(row["fifties"], "batting_stats_by_tournament.fifties"),
                 integer_value(row["hundreds"], "batting_stats_by_tournament.hundreds"),
                 real_value(row["batting_average"], "batting_stats_by_tournament.batting_average", nullable=True),
                 real_value(row["batting_strike_rate"], "batting_stats_by_tournament.batting_strike_rate", nullable=True),
+                real_value(row["dot_ball_percentage"], "batting_stats_by_tournament.dot_ball_percentage", nullable=True),
             )
         )
     insert_source_rows(
@@ -760,8 +800,9 @@ def load_data(
         (
             "tournament_id", "player_id", "gender", "matches_played", "innings_played",
             "times_out", "not_outs", "total_runs", "highest_score",
-            "total_balls_faced", "total_fours", "total_sixes", "fifties",
+            "total_balls_faced", "total_dot_balls", "total_fours", "total_sixes", "fifties",
             "hundreds", "batting_average", "batting_strike_rate",
+            "dot_ball_percentage",
         ),
         batting_stats_rows,
     )
@@ -793,6 +834,16 @@ def load_data(
                 integer_value(row["five_wicket_hauls"], "bowling_stats_by_tournament.five_wicket_hauls"),
                 integer_value(row["wides"], "bowling_stats_by_tournament.wides"),
                 integer_value(row["no_balls"], "bowling_stats_by_tournament.no_balls"),
+                integer_value(row["maidens"], "bowling_stats_by_tournament.maidens"),
+                integer_value(
+                    row["total_dot_balls"],
+                    "bowling_stats_by_tournament.total_dot_balls",
+                ),
+                real_value(
+                    row["dot_ball_percentage"],
+                    "bowling_stats_by_tournament.dot_ball_percentage",
+                    nullable=True,
+                ),
             )
         )
     insert_source_rows(
@@ -804,6 +855,7 @@ def load_data(
             "runs_conceded", "wickets", "bowling_average", "economy_rate",
             "bowling_strike_rate", "best_bowling_figures", "three_wicket_hauls",
             "four_wicket_hauls", "five_wicket_hauls", "wides", "no_balls",
+            "maidens", "total_dot_balls", "dot_ball_percentage",
         ),
         bowling_stats_rows,
     )

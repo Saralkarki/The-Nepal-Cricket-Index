@@ -563,6 +563,65 @@ def get_player_profile(player_id: int) -> dict[str, Any] | None:
     }
 
 
+def get_player_radar_comparison(
+    tournament_id: int | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT player_id,
+                   SUM(total_runs) AS total_runs,
+                   SUM(matches_played) AS matches_played,
+                   SUM(total_dot_balls) AS total_dot_balls,
+                   SUM(total_balls_faced) AS total_balls_faced,
+                   SUM(total_fours) AS total_fours,
+                   SUM(total_sixes) AS total_sixes,
+                   CASE
+                       WHEN %s IS NULL THEN
+                           SUM(total_dot_balls) * 100.0
+                           / NULLIF(SUM(total_balls_faced), 0)
+                       ELSE MAX(dot_ball_percentage)
+                   END AS dot_ball_percentage
+            FROM batting_stats_by_tournament
+            WHERE (%s IS NULL OR tournament_id = %s)
+            GROUP BY player_id
+            """,
+            [tournament_id, tournament_id, tournament_id],
+        )
+        batting = _rows_as_dicts(cursor)
+
+        cursor.execute(
+            """
+            SELECT player_id,
+                   SUM(wickets) AS wickets,
+                   SUM(matches_played) AS matches_bowled,
+                   SUM(runs_conceded) AS runs_conceded,
+                   SUM(total_legal_balls) AS total_legal_balls,
+                   SUM(maidens) AS maidens,
+                   SUM(total_dot_balls) AS total_dot_balls,
+                   CASE
+                       WHEN %s IS NULL THEN
+                           SUM(runs_conceded) * 6.0
+                           / NULLIF(SUM(total_legal_balls), 0)
+                       ELSE MAX(economy_rate)
+                   END AS economy,
+                   CASE
+                       WHEN %s IS NULL THEN
+                           SUM(total_dot_balls) * 100.0
+                           / NULLIF(SUM(total_legal_balls), 0)
+                       ELSE MAX(dot_ball_percentage)
+                   END AS dot_ball_percentage
+            FROM bowling_stats_by_tournament
+            WHERE (%s IS NULL OR tournament_id = %s)
+            GROUP BY player_id
+            """,
+            [tournament_id, tournament_id, tournament_id, tournament_id],
+        )
+        bowling = _rows_as_dicts(cursor)
+
+    return {"batting": batting, "bowling": bowling}
+
+
 def get_player_match_performance(
     player_id: int, tournament_id: int | None = None
 ) -> dict[str, list[dict[str, Any]]]:

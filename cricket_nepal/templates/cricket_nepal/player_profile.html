@@ -1,6 +1,11 @@
 {% extends "cricket_nepal/base.html" %}
+{% load static %}
 
 {% block title %}{{ profile.player_name }} · Player Profile{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'cricket_nepal/js/player-radar.js' %}" defer></script>
+{% endblock %}
 
 {% block content %}
 <section class="page-section player-profile">
@@ -127,6 +132,46 @@
         {% endfor %}
     </section>
     {% endif %}
+
+    <section class="player-stats-section" aria-labelledby="radar-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Player comparison</p>
+                <h2 id="radar-heading">Performance radar</h2>
+            </div>
+            <span class="player-muted">Normalized against {{ radar_charts.batting.season_label }} player statistics</span>
+        </div>
+        <div class="player-radar-grid">
+            <article class="player-radar-card">
+                <h3>Batting</h3>
+                {% if radar_charts.batting.available %}
+                <div class="radar-plot" data-radar-chart data-chart-data="batting-radar-data" data-color="green" role="img" aria-label="Batting performance radar chart for {{ profile.player_name }}"></div>
+                <ul class="radar-actual-values">
+                    {% for axis in radar_charts.batting.axes %}
+                    <li><span>{{ axis.label }}</span><strong>{{ axis.actual }}</strong></li>
+                    {% endfor %}
+                </ul>
+                {{ radar_charts.batting|json_script:"batting-radar-data" }}
+                {% else %}
+                <p class="radar-empty-state">No batting records available.</p>
+                {% endif %}
+            </article>
+            <article class="player-radar-card">
+                <h3>Bowling</h3>
+                {% if radar_charts.bowling.available %}
+                <div class="radar-plot" data-radar-chart data-chart-data="bowling-radar-data" data-color="navy" role="img" aria-label="Bowling performance radar chart for {{ profile.player_name }}"></div>
+                <ul class="radar-actual-values">
+                    {% for axis in radar_charts.bowling.axes %}
+                    <li><span>{{ axis.label }}</span><strong>{{ axis.actual }}</strong></li>
+                    {% endfor %}
+                </ul>
+                {{ radar_charts.bowling|json_script:"bowling-radar-data" }}
+                {% else %}
+                <p class="radar-empty-state">No bowling records available.</p>
+                {% endif %}
+            </article>
+        </div>
+    </section>
 
     <section class="player-stats-section" aria-labelledby="performance-heading">
         <div class="player-section-heading">

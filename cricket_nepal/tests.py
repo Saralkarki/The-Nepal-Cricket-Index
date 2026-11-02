@@ -458,6 +458,10 @@ class PlayerProfileTests(SimpleTestCase):
         with (
             patch("cricket_nepal.views.get_player_profile", return_value=self.profile),
             patch(
+                "cricket_nepal.views.get_player_radar_comparison",
+                return_value={"batting": [], "bowling": []},
+            ),
+            patch(
                 "cricket_nepal.views.get_player_match_performance",
                 return_value={"batting": batting, "bowling": bowling},
             ) as performance_query,
@@ -500,6 +504,10 @@ class PlayerProfileTests(SimpleTestCase):
         with (
             patch("cricket_nepal.views.get_player_profile", return_value=batter_only),
             patch(
+                "cricket_nepal.views.get_player_radar_comparison",
+                return_value={"batting": [], "bowling": []},
+            ),
+            patch(
                 "cricket_nepal.views.get_player_match_performance",
                 return_value={"batting": [], "bowling": []},
             ),
@@ -511,10 +519,181 @@ class PlayerProfileTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No bowling statistics available.")
         self.assertContains(response, "No bowling performances for this selection.")
+        self.assertContains(response, "No bowling records available.")
 
     def test_missing_player_returns_404(self):
-        with patch("cricket_nepal.views.get_player_profile", return_value=None):
+        with (
+            patch("cricket_nepal.views.get_player_profile", return_value=None),
+            patch("cricket_nepal.views.get_player_radar_comparison") as radar_query,
+        ):
             response = self.client.get(
                 reverse("cricket_nepal:player_profile", args=[999999])
             )
         self.assertEqual(response.status_code, 404)
+        radar_query.assert_not_called()
+
+    @staticmethod
+    def _radar_cohort():
+        return {
+            "batting": [
+                {
+                    "player_id": 25,
+                    "total_runs": 100,
+                    "matches_played": 4,
+                    "dot_ball_percentage": 20.0,
+                    "total_fours": 10,
+                    "total_sixes": 2,
+                },
+                {
+                    "player_id": 26,
+                    "total_runs": 200,
+                    "matches_played": 2,
+                    "dot_ball_percentage": 10.0,
+                    "total_fours": 5,
+                    "total_sixes": 0,
+                },
+            ],
+            "bowling": [
+                {
+                    "player_id": 25,
+                    "wickets": 5,
+                    "matches_bowled": 4,
+                    "economy": 6.0,
+                    "maidens": 1,
+                    "dot_ball_percentage": 20.0,
+                },
+                {
+                    "player_id": 26,
+                    "wickets": 3,
+                    "matches_bowled": 2,
+                    "economy": 9.0,
+                    "maidens": 3,
+                    "dot_ball_percentage": 50.0,
+                },
+            ],
+        }
+
+    def test_radar_charts_use_selected_season_cohort_and_directions(self):
+        cohort = self._radar_cohort()
+        with (
+            patch("cricket_nepal.views.get_player_profile", return_value=self.profile),
+            patch(
+                "cricket_nepal.views.get_player_radar_comparison",
+                return_value=cohort,
+            ) as comparison_query,
+            patch(
+                "cricket_nepal.views.get_player_match_performance",
+                return_value={"batting": [], "bowling": []},
+            ),
+        ):
+            response = self.client.get(
+                reverse("cricket_nepal:player_profile", args=[25]),
+                {"season_id": "1783"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        comparison_query.assert_called_once_with(1783)
+        batting = response.context["radar_charts"]["batting"]
+        bowling = response.context["radar_charts"]["bowling"]
+        self.assertTrue(batting["available"])
+        self.assertTrue(bowling["available"])
+        self.assertEqual(
+            [axis["normalized"] for axis in batting["axes"]],
+            [0, 100, 0, 100, 100],
+        )
+        self.assertEqual(
+            [axis["normalized"] for axis in bowling["axes"]],
+            [100, 100, 100, 0, 100],
+        )
+        self.assertEqual(batting["axes"][0]["tooltip"], "Total runs: 100")
+        self.assertEqual(batting["season_label"], "2024/25")
+        self.assertContains(response, "batting-radar-data")
+        self.assertContains(response, "bowling-radar-data")
+        self.assertContains(response, "Total runs: 100")
+        self.assertContains(response, "Economy: 6")
+
+    def test_radar_charts_use_the_other_selected_season(self):
+        cohort = self._radar_cohort()
+        cohort["batting"][0]["total_runs"] = 300
+        with (
+            patch("cricket_nepal.views.get_player_profile", return_value=self.profile),
+            patch(
+                "cricket_nepal.views.get_player_radar_comparison",
+                return_value=cohort,
+            ) as comparison_query,
+            patch(
+                "cricket_nepal.views.get_player_match_performance",
+                return_value={"batting": [], "bowling": []},
+            ) as performance_query,
+        ):
+            response = self.client.get(
+                reverse("cricket_nepal:player_profile", args=[25]),
+                {"season_id": "1998"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        comparison_query.assert_called_once_with(1998)
+        performance_query.assert_called_once_with(25, tournament_id=1998)
+        charts = response.context["radar_charts"]
+        self.assertEqual(charts["batting"]["season_label"], "2025/26")
+        self.assertEqual(charts["batting"]["axes"][0]["value"], 300)
+        self.assertEqual(charts["batting"]["axes"][0]["normalized"], 100)
+        self.assertEqual(charts["bowling"]["season_label"], "2025/26")
+
+    def test_combined_radar_cohort_and_missing_metrics_are_not_zero_filled(self):
+        from cricket_nepal.views import _build_radar_chart
+
+        cohort = {
+            "batting": [
+                {
+                    "player_id": 25,
+                    "total_runs": 0,
+                    "matches_played": 1,
+                    "dot_ball_percentage": None,
+                    "total_fours": 0,
+                    "total_sixes": 0,
+                },
+                {
+                    "player_id": 26,
+                    "total_runs": 0,
+                    "matches_played": 2,
+                    "dot_ball_percentage": 50.0,
+                    "total_fours": 1,
+                    "total_sixes": 0,
+                },
+            ],
+            "bowling": [],
+        }
+        with (
+            patch("cricket_nepal.views.get_player_profile", return_value=self.profile),
+            patch(
+                "cricket_nepal.views.get_player_radar_comparison",
+                return_value=cohort,
+            ) as comparison_query,
+            patch(
+                "cricket_nepal.views.get_player_match_performance",
+                return_value={"batting": [], "bowling": []},
+            ),
+        ):
+            response = self.client.get(
+                reverse("cricket_nepal:player_profile", args=[25])
+            )
+
+        comparison_query.assert_called_once_with(None)
+        chart = response.context["radar_charts"]["batting"]
+        self.assertEqual(chart["season_label"], "All seasons")
+        self.assertTrue(chart["available"])
+        self.assertEqual(chart["axes"][0]["normalized"], 100)
+        self.assertEqual(chart["axes"][2]["normalized"], None)
+        self.assertEqual(chart["axes"][2]["actual"], "Not available")
+        self.assertFalse(response.context["radar_charts"]["bowling"]["available"])
+        self.assertContains(response, "No bowling records available.")
+        missing_player_chart = _build_radar_chart(
+            cohort["batting"],
+            player_id=99,
+            axis_definitions=(
+                ("Total runs", "total_runs", True, ""),
+            ),
+            season_label="All seasons",
+        )
+        self.assertFalse(missing_player_chart["available"])

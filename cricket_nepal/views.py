@@ -5,12 +5,73 @@ from cricket_nepal.data_access import (
     get_player_directory,
     get_player_match_performance,
     get_player_profile,
+    get_player_radar_comparison,
     get_matches,
     get_match_scorecard,
     get_teams,
     get_tournament_overview,
     get_tournaments,
 )
+
+
+BATTER_RADAR_AXES = (
+    ("Total runs", "total_runs", True, ""),
+    ("Matches played", "matches_played", True, ""),
+    ("Dot-ball %", "dot_ball_percentage", False, "%"),
+    ("Fours", "total_fours", True, ""),
+    ("Sixes", "total_sixes", True, ""),
+)
+
+BOWLER_RADAR_AXES = (
+    ("Wickets", "wickets", True, ""),
+    ("Matches bowled", "matches_bowled", True, ""),
+    ("Economy", "economy", False, ""),
+    ("Maidens", "maidens", True, ""),
+    ("Dot-ball %", "dot_ball_percentage", False, "%"),
+)
+
+
+def _build_radar_chart(
+    cohort: list[dict], player_id: int, axis_definitions: tuple, season_label: str
+) -> dict:
+    player_data = next(
+        (row for row in cohort if row["player_id"] == player_id),
+        None,
+    )
+    axes = []
+    for label, key, higher_is_better, unit in axis_definitions:
+        cohort_values = [
+            row[key] for row in cohort if row[key] is not None
+        ]
+        value = player_data[key] if player_data is not None else None
+        normalized = None
+        if value is not None and cohort_values:
+            low, high = min(cohort_values), max(cohort_values)
+            if high == low:
+                normalized = 100
+            else:
+                normalized = (value - low) * 100 / (high - low)
+                if not higher_is_better:
+                    normalized = 100 - normalized
+        actual = (
+            f"{value:g}{unit}" if value is not None else "Not available"
+        )
+        axes.append(
+            {
+                "label": label,
+                "value": value,
+                "normalized": normalized,
+                "actual": actual,
+                "tooltip": f"{label}: {actual}",
+            }
+        )
+
+    return {
+        "available": player_data is not None
+        and any(axis["value"] is not None for axis in axes),
+        "season_label": season_label,
+        "axes": axes,
+    }
 
 
 def _get_tournament_selection(request):
@@ -101,6 +162,22 @@ def player_profile(request, player_id: int):
     performance = get_player_match_performance(
         player_id, tournament_id=selected_tournament_id
     )
+    radar_comparison = get_player_radar_comparison(selected_tournament_id)
+    season_label = selected_season["season"] if selected_season else "All seasons"
+    radar_charts = {
+        "batting": _build_radar_chart(
+            radar_comparison["batting"],
+            player_id,
+            BATTER_RADAR_AXES,
+            season_label,
+        ),
+        "bowling": _build_radar_chart(
+            radar_comparison["bowling"],
+            player_id,
+            BOWLER_RADAR_AXES,
+            season_label,
+        ),
+    }
     return render(
         request,
         "cricket_nepal/player_profile.html",
@@ -108,6 +185,7 @@ def player_profile(request, player_id: int):
             "profile": profile,
             "performance": performance,
             "selected_season": selected_season,
+            "radar_charts": radar_charts,
         },
     )
 

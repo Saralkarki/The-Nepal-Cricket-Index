@@ -1,7 +1,10 @@
 from django.http import Http404
 from django.shortcuts import render
+from django.utils.text import slugify
 
 from cricket_nepal.data_access import (
+    get_team_directory,
+    get_team_profile,
     get_player_directory,
     get_player_match_performance,
     get_player_profile,
@@ -9,7 +12,7 @@ from cricket_nepal.data_access import (
     get_matches,
     get_match_scorecard,
     get_teams,
-    get_tournament_overview,
+    get_npl_tournament_overview,
     get_tournaments,
 )
 
@@ -89,16 +92,65 @@ def _get_tournament_selection(request):
 
 
 def home(request):
-    tournaments, selected_tournament = _get_tournament_selection(request)
-    overview = get_tournament_overview(selected_tournament["tournament_id"])
-
     return render(
         request,
         "cricket_nepal/home.html",
+        {"tournaments": _tournament_directory()},
+    )
+
+
+def _tournament_directory():
+    tournaments_by_name = {}
+    for tournament in get_tournaments():
+        entry = tournaments_by_name.setdefault(
+            tournament["tournament_name"],
+            {
+                "tournament_name": tournament["tournament_name"],
+                "tournament_slug": slugify(tournament["tournament_name"]),
+                "seasons": [],
+            },
+        )
+        entry["seasons"].append(tournament["season"])
+    return list(tournaments_by_name.values())
+
+
+def tournaments(request):
+    return render(
+        request,
+        "cricket_nepal/tournaments.html",
+        {"tournaments": _tournament_directory()},
+    )
+
+
+def tournament_overview(request, tournament_slug: str):
+    npl_slug = slugify("Nepal Premier League")
+    if tournament_slug != npl_slug:
+        raise Http404("Tournament not found")
+
+    npl_seasons = [
+        tournament
+        for tournament in get_tournaments()
+        if tournament["tournament_name"] == "Nepal Premier League"
+    ]
+    season_id = request.GET.get("season_id")
+    selected_season = next(
+        (
+            season
+            for season in npl_seasons
+            if str(season["tournament_id"]) == season_id
+        ),
+        None,
+    )
+    overview = get_npl_tournament_overview(
+        selected_season["tournament_id"] if selected_season else None
+    )
+    return render(
+        request,
+        "cricket_nepal/tournament_overview.html",
         {
-            "tournaments": tournaments,
-            "selected_tournament": selected_tournament,
             "overview": overview,
+            "selected_season": selected_season,
+            "tournament_slug": npl_slug,
         },
     )
 
@@ -132,6 +184,52 @@ def players(request):
         {
             "players": get_player_directory(search_term),
             "search_term": search_term,
+        },
+    )
+
+
+def teams(request):
+    return render(
+        request,
+        "cricket_nepal/teams.html",
+        {"teams": get_team_directory()},
+    )
+
+
+def team_profile(request, team_slug: str):
+    team = next(
+        (
+            team
+            for team in get_team_directory()
+            if team["team_slug"] == team_slug
+        ),
+        None,
+    )
+    if team is None:
+        raise Http404("Team not found")
+
+    season_id = request.GET.get("season_id")
+    selected_season = next(
+        (
+            season
+            for season in team["participations"]
+            if str(season["tournament_id"]) == season_id
+        ),
+        None,
+    )
+    selected_tournament_id = (
+        selected_season["tournament_id"] if selected_season else None
+    )
+    profile = get_team_profile(team["team_name"], selected_tournament_id)
+    if profile is None:
+        raise Http404("Team not found")
+
+    return render(
+        request,
+        "cricket_nepal/team_profile.html",
+        {
+            "team": profile,
+            "selected_season": selected_season,
         },
     )
 

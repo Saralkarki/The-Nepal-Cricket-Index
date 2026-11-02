@@ -1,0 +1,245 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}{{ team.team_name }} · Team Profile{% endblock %}
+
+{% block content %}
+<section class="page-section team-profile">
+    <a class="match-back-link" href="{% url 'cricket_nepal:teams' %}">← Teams</a>
+
+    <header class="team-profile-header">
+        <div class="teams-heading team-profile-heading">
+            <p class="eyebrow section-eyebrow">Franchise profile</p>
+            <h1>{{ team.team_name }}</h1>
+            {% if team.is_kathmandu_brand_change %}
+            <p class="section-intro">Known as Kathmandu Gurkhas in 2024/25; the franchise was branded Kathmandu Gorkhas in 2025/26.</p>
+            {% endif %}
+        </div>
+        <form class="player-season-filter" method="get" aria-label="Filter team profile by season">
+            <label for="team-season-filter">Season</label>
+            <select id="team-season-filter" name="season_id">
+                <option value="">Overall</option>
+                {% for season in team.seasons %}
+                <option value="{{ season.tournament_id }}"{% if selected_season.tournament_id == season.tournament_id %} selected{% endif %}>{{ season.season }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+        </form>
+    </header>
+
+    <section class="player-stats-section" aria-labelledby="team-overview-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Team overview</p>
+                <h2 id="team-overview-heading">{% if selected_season %}{{ selected_season.season }}{% else %}Overall record{% endif %}</h2>
+            </div>
+        </div>
+        <dl class="team-overview-grid">
+            <div><dt>Matches played</dt><dd>{{ team.matches_played }}</dd></div>
+            <div><dt>Wins</dt><dd>{{ team.wins }}</dd></div>
+            <div><dt>Losses</dt><dd>{{ team.losses }}</dd></div>
+            <div><dt>Win percentage</dt><dd>{{ team.win_percentage|floatformat:1|default_if_none:"—" }}{% if team.win_percentage is not None %}%{% endif %}</dd></div>
+        </dl>
+        {% if team.ties or team.no_results %}
+        <p class="team-result-note">
+            {% if team.ties %}{{ team.ties }} tied{% endif %}
+            {% if team.ties and team.no_results %} · {% endif %}
+            {% if team.no_results %}{{ team.no_results }} no result{% endif %}
+        </p>
+        {% endif %}
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="team-batting-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Innings and batting scorecards</p>
+                <h2 id="team-batting-heading">Team batting performance</h2>
+            </div>
+        </div>
+        <dl class="team-metric-grid">
+            <div><dt>Total runs</dt><dd>{{ team.batting.total_runs }}</dd></div>
+            <div><dt>Batting average</dt><dd>{{ team.batting.average|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Strike rate</dt><dd>{{ team.batting.strike_rate|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Runs per innings</dt><dd>{{ team.batting.average_runs_per_innings|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Run rate</dt><dd>{{ team.batting.run_rate|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Fours</dt><dd>{{ team.batting.fours }}</dd></div>
+            <div><dt>Sixes</dt><dd>{{ team.batting.sixes }}</dd></div>
+            <div><dt>Dot balls</dt><dd>{{ team.batting.dot_balls }}</dd></div>
+            <div><dt>Dot-ball %</dt><dd>{{ team.batting.dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if team.batting.dot_ball_percentage is not None %}%{% endif %}</dd></div>
+        </dl>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="team-bowling-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Bowling scorecards</p>
+                <h2 id="team-bowling-heading">Team bowling performance</h2>
+            </div>
+        </div>
+        <dl class="team-metric-grid">
+            <div><dt>Wickets taken</dt><dd>{{ team.bowling.wickets }}</dd></div>
+            <div><dt>Bowling average</dt><dd>{{ team.bowling.average|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Economy rate</dt><dd>{{ team.bowling.economy|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Bowling strike rate</dt><dd>{{ team.bowling.strike_rate|floatformat:2|default_if_none:"—" }}</dd></div>
+            <div><dt>Runs conceded</dt><dd>{{ team.bowling.runs_conceded }}</dd></div>
+            <div><dt>Dot-ball %</dt><dd>{{ team.bowling.dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if team.bowling.dot_ball_percentage is not None %}%{% endif %}</dd></div>
+            <div><dt>Dot balls</dt><dd>{{ team.bowling.dot_balls }}</dd></div>
+            <div><dt>Maidens</dt><dd>{{ team.bowling.maidens }}</dd></div>
+        </dl>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="team-performers-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Season leaders</p>
+                <h2 id="team-performers-heading">Top performers</h2>
+            </div>
+        </div>
+        <div class="team-performers-grid">
+            <section class="team-performer-group" aria-labelledby="batting-leaders-heading">
+                <h3 id="batting-leaders-heading">Batting leaders</h3>
+                <div class="team-leader-grid">
+                    <article class="team-leader-card">
+                        <h4>Top run scorer</h4>
+                        {% for leader in team.top_batting.runs %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.runs }} runs</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.innings }} innings</small>
+                        {% empty %}<p class="player-muted">No batting scorecards.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best batting average</h4>
+                        {% for leader in team.top_batting.average %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.average|floatformat:2 }}</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.dismissals }} dismissals</small>
+                        {% empty %}<p class="player-muted">No qualified player.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best strike rate</h4>
+                        {% for leader in team.top_batting.strike_rate %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.strike_rate|floatformat:2 }}</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.balls_faced }} balls</small>
+                        {% empty %}<p class="player-muted">No qualified player.</p>{% endfor %}
+                    </article>
+                </div>
+                <p class="team-qualification-note">Average: at least 3 dismissals. Strike rate: at least 60 balls.</p>
+            </section>
+            <section class="team-performer-group" aria-labelledby="bowling-leaders-heading">
+                <h3 id="bowling-leaders-heading">Bowling leaders</h3>
+                <div class="team-leader-grid">
+                    <article class="team-leader-card">
+                        <h4>Most wickets</h4>
+                        {% for leader in team.top_bowling.wickets %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.wickets }} wickets</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.innings }} innings</small>
+                        {% empty %}<p class="player-muted">No bowling scorecards.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best economy</h4>
+                        {% for leader in team.top_bowling.economy %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.economy|floatformat:2 }}</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.legal_balls }} balls</small>
+                        {% empty %}<p class="player-muted">No qualified player.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best match figures</h4>
+                        {% for leader in team.top_bowling.figures %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.wickets }}/{{ leader.runs_conceded }}</strong></p>
+                        <small><a href="{% url 'cricket_nepal:match_detail' leader.match_id %}">vs {{ leader.opponent }} · {{ leader.match_date }}</a></small>
+                        {% empty %}<p class="player-muted">No bowling scorecards.</p>{% endfor %}
+                    </article>
+                </div>
+                <p class="team-qualification-note">Economy: at least 12 overs.</p>
+            </section>
+        </div>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="team-recent-form-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Last five matches</p>
+                <h2 id="team-recent-form-heading">Recent form</h2>
+            </div>
+        </div>
+        {% if team.recent_form %}
+        <div class="team-form-indicator" aria-label="Recent form, most recent first">
+            {% for match in team.recent_form %}
+            <span class="team-form-result {{ match.result_class }}" title="{{ match.result }} vs {{ match.opponent }} on {{ match.match_date }}">
+                {% if match.result == "Won" %}W{% elif match.result == "Lost" %}L{% elif match.result == "Tied" %}T{% else %}NR{% endif %}
+            </span>
+            {% endfor %}
+        </div>
+        <ol class="team-recent-list">
+            {% for match in team.recent_form %}
+            <li>
+                <a href="{% url 'cricket_nepal:match_detail' match.match_id %}">
+                    <time datetime="{{ match.match_date }}">{{ match.match_date }}</time>
+                    <span>vs {{ match.opponent }}</span>
+                    <strong class="team-result-label {{ match.result_class }}">{{ match.recent_summary }}</strong>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
+        {% else %}
+        <p class="player-empty-state">No recent matches found.</p>
+        {% endif %}
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="team-match-history-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Fixtures and results</p>
+                <h2 id="team-match-history-heading">Match history</h2>
+            </div>
+            <span class="player-muted">{{ team.matches_played }} matches</span>
+        </div>
+        {% if team.matches %}
+        <div class="team-table-scroll">
+        <table class="team-match-table">
+            <thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Score</th><th>Venue</th><th>Winning margin</th><th>Player of the Match</th></tr></thead>
+            <tbody>
+            {% for match in team.matches %}
+            <tr>
+                <td><a href="{% url 'cricket_nepal:match_detail' match.match_id %}"><time datetime="{{ match.match_date }}">{{ match.match_date }}</time></a></td>
+                <td>{{ match.opponent }}</td>
+                <td><span class="team-result-label {{ match.result_class }}">{{ match.result }}</span></td>
+                <td>{{ match.team_score|default_if_none:"—" }} – {{ match.opponent_score|default_if_none:"—" }}</td>
+                <td>{{ match.venue_name|default_if_none:"—" }}</td>
+                <td>{{ match.winning_margin|default_if_none:"—" }}</td>
+                <td>{% if match.player_of_match %}<a href="{% url 'cricket_nepal:match_detail' match.match_id %}">{{ match.player_of_match }}</a>{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="player-empty-state">No matches found for this season.</p>
+        {% endif %}
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="team-players-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Squad</p>
+                <h2 id="team-players-heading">Team players</h2>
+            </div>
+            <span class="player-muted">{{ team.players|length }} players</span>
+        </div>
+        <div class="team-table-scroll">
+        <table class="team-squad-table">
+            <thead><tr><th>Player</th><th>Matches</th><th>Runs</th><th>Wickets</th></tr></thead>
+            <tbody>
+            {% for player in team.players %}
+            <tr>
+                <td><a href="{% url 'cricket_nepal:player_profile' player.player_id %}">{{ player.player_name }}</a></td>
+                <td>{{ player.matches }}</td>
+                <td>{{ player.runs }}</td>
+                <td>{{ player.wickets }}</td>
+            </tr>
+            {% empty %}
+            <tr><td class="player-muted" colspan="4">No players found for this season.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+</section>
+{% endblock %}

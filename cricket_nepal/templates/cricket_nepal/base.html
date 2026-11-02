@@ -18,12 +18,10 @@
                 <span class="brand-name">Nepal Cricket <span>Dashboard</span></span>
             </a>
             <nav class="primary-nav" aria-label="Main navigation">
-                <a href="{% url 'cricket_nepal:home' %}#overview">Overview</a>
+                <a href="{% url 'cricket_nepal:home' %}">Home</a>
+                <a href="{% url 'cricket_nepal:tournaments' %}">Tournaments</a>
+                <a href="{% url 'cricket_nepal:players' %}">Players</a>
                 <a href="{% url 'cricket_nepal:matches' %}">Matches</a>
-                <a href="{% url 'cricket_nepal:players' %}">Player Profiles</a>
-                <a href="{% url 'cricket_nepal:home' %}#teams">Teams</a>
-                <a href="{% url 'cricket_nepal:home' %}#batting">Batting</a>
-                <a href="{% url 'cricket_nepal:home' %}#bowling">Bowling</a>
             </nav>
         </div>
     </header>
@@ -41,7 +39,7 @@
                 <a href="https://cricsheet.org/" target="_blank" rel="noopener noreferrer">Cricsheet</a>.
                 Dataset integration and licence details will be confirmed before statistics are published.
             </p>
-            <span class="footer-note">NPL · Seasons 1—2</span>
+            <span class="footer-note">Nepal cricket data</span>
         </div>
     </footer>
     {% block extra_scripts %}{% endblock %}

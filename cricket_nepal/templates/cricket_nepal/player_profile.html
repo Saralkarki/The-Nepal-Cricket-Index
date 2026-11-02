@@ -36,6 +36,29 @@
         </div>
     </section>
 
+    <section class="player-attributes-section" aria-labelledby="player-attributes-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Player details</p>
+                <h2 id="player-attributes-heading">Player attributes</h2>
+            </div>
+        </div>
+        <dl class="player-attribute-grid">
+            <div>
+                <dt>Batting style</dt>
+                <dd>{% if profile.attributes.conflicts.batting_attribute %}Conflicting data{% elif profile.attributes.batting_attribute %}{{ profile.attributes.batting_attribute }}{% else %}Not available{% endif %}</dd>
+            </div>
+            <div>
+                <dt>Bowling style</dt>
+                <dd>{% if profile.attributes.conflicts.bowling_attribute %}Conflicting data{% elif profile.attributes.bowling_attribute %}{{ profile.attributes.bowling_attribute }}{% else %}Not available{% endif %}</dd>
+            </div>
+            <div>
+                <dt>Wicketkeeper</dt>
+                <dd>{% if profile.attributes.conflicts.is_wicketkeeper %}Conflicting data{% elif profile.attributes.is_wicketkeeper == True %}Yes{% elif profile.attributes.is_wicketkeeper == False %}No{% else %}Not available{% endif %}</dd>
+            </div>
+        </dl>
+    </section>
+
     <section class="player-stats-section" aria-labelledby="overall-stats-heading">
         <div class="player-section-heading">
             <div>

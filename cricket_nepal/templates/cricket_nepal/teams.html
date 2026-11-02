@@ -1,0 +1,32 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Teams · Nepal Cricket Dashboard{% endblock %}
+
+{% block content %}
+<section class="page-section teams-page">
+    <header class="teams-heading">
+        <p class="eyebrow section-eyebrow">Nepal Premier League</p>
+        <h1>Teams</h1>
+        <p class="section-intro">Franchise records across the tournaments represented in the database.</p>
+    </header>
+
+    <div class="team-directory-grid">
+        {% for team in teams %}
+        <article class="team-directory-card">
+            <p class="eyebrow section-eyebrow">Franchise</p>
+            <h2><a href="{% url 'cricket_nepal:team_profile' team.team_slug %}">{{ team.team_name }}</a></h2>
+            <p class="team-seasons">{{ team.seasons|join:" · " }}</p>
+            <dl class="team-directory-stats">
+                <div><dt>Matches</dt><dd>{{ team.matches_played }}</dd></div>
+                <div><dt>Wins</dt><dd>{{ team.wins }}</dd></div>
+                <div><dt>Losses</dt><dd>{{ team.losses }}</dd></div>
+                <div><dt>Players with appearances</dt><dd>{{ team.players_with_recorded_appearances }}</dd></div>
+            </dl>
+            <a class="team-card-link" href="{% url 'cricket_nepal:team_profile' team.team_slug %}">View team profile <span aria-hidden="true">→</span></a>
+        </article>
+        {% empty %}
+        <p class="player-empty-state">No teams are available.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -10,6 +10,7 @@ import math
 import sqlite3
 import sys
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +20,16 @@ import duckdb
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = ROOT / "data" / "npl"
 DEFAULT_DATABASE = ROOT / "data" / "nepal_cricket.db"
+SOURCE_FILENAMES = {
+    "match_players": "int_npl_match_players.parquet",
+}
 
 SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
     "matches": {
         "match_id": "VARCHAR",
         "match_date": "VARCHAR",
+        "stage": "VARCHAR",
+        "stage_order": "INTEGER",
         "match_format": "VARCHAR",
         "team_1_name": "VARCHAR",
         "team_2_name": "VARCHAR",
@@ -148,12 +154,23 @@ SOURCE_SCHEMAS: dict[str, dict[str, str]] = {
         "tournament_name": "VARCHAR",
         "season": "VARCHAR",
     },
+    "match_players": {
+        "match_id": "BIGINT",
+        "tournament_id": "BIGINT",
+        "team_name": "VARCHAR",
+        "player_name": "VARCHAR",
+        "cricsheet_player_id": "VARCHAR",
+        "bowling_attribute": "VARCHAR",
+        "batting_attribute": "VARCHAR",
+        "is_wicketkeeper": "BOOLEAN",
+    },
 }
 
 TABLE_ORDER = (
     "tournaments",
     "players",
     "matches",
+    "match_players",
     "innings_summary",
     "batting_scorecards",
     "bowling_scorecards",
@@ -167,6 +184,7 @@ PRIMARY_KEYS = {
     "tournaments": ("tournament_id",),
     "players": ("player_id",),
     "matches": ("match_id",),
+    "match_players": ("match_id", "player_name"),
     "innings_summary": ("match_id", "innings_number"),
     "batting_scorecards": ("match_id", "innings_number", "batting_position"),
     "bowling_scorecards": ("match_id", "innings_number", "player_id"),
@@ -197,6 +215,8 @@ CREATE_STATEMENTS = (
     CREATE TABLE matches (
         match_id TEXT PRIMARY KEY NOT NULL,
         match_date TEXT NOT NULL,
+        stage TEXT,
+        stage_order INTEGER,
         match_format TEXT NOT NULL,
         team_1_name TEXT NOT NULL,
         team_2_name TEXT NOT NULL,
@@ -213,6 +233,24 @@ CREATE_STATEMENTS = (
         match_referee_name TEXT,
         tournament_id INTEGER NOT NULL,
         FOREIGN KEY (tournament_id) REFERENCES tournaments(tournament_id)
+    )
+    """,
+    """
+    CREATE TABLE match_players (
+        match_id INTEGER NOT NULL,
+        tournament_id INTEGER NOT NULL,
+        team_name TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        cricsheet_player_id TEXT NOT NULL,
+        bowling_attribute TEXT,
+        batting_attribute TEXT,
+        is_wicketkeeper INTEGER
+            CHECK (is_wicketkeeper IS NULL OR is_wicketkeeper IN (0, 1)),
+        PRIMARY KEY (match_id, player_name),
+        UNIQUE (match_id, cricsheet_player_id),
+        FOREIGN KEY (match_id) REFERENCES matches(match_id),
+        FOREIGN KEY (tournament_id) REFERENCES tournaments(tournament_id),
+        FOREIGN KEY (cricsheet_player_id) REFERENCES players(cricsheet_player_id)
     )
     """,
     """
@@ -352,6 +390,15 @@ DROP_STATEMENTS = tuple(
     f"DROP TABLE IF EXISTS {table}" for table in reversed(TABLE_ORDER)
 )
 
+CREATE_INDEX_STATEMENTS = (
+    "CREATE INDEX idx_match_players_player_tournament "
+    "ON match_players (cricsheet_player_id, tournament_id)",
+    "CREATE INDEX idx_match_players_match ON match_players (match_id)",
+    "CREATE INDEX idx_match_players_tournament_team "
+    "ON match_players (tournament_id, team_name)",
+    "CREATE INDEX idx_match_players_player_name ON match_players (player_name)",
+)
+
 
 class ImportValidationError(ValueError):
     """Raised when source data cannot be imported without losing integrity."""
@@ -364,8 +411,11 @@ def quote_identifier(value: str) -> str:
 def read_source_data(source_dir: Path) -> dict[str, list[dict[str, Any]]]:
     missing = [
         filename
-        for filename in (f"{table}.parquet" for table in SOURCE_SCHEMAS)
-        if not (source_dir / filename).is_file()
+        for table in SOURCE_SCHEMAS
+        if not (
+            source_dir
+            / SOURCE_FILENAMES.get(table, f"{table}.parquet")
+        ).is_file()
     ]
     if missing:
         raise ImportValidationError(
@@ -376,20 +426,39 @@ def read_source_data(source_dir: Path) -> dict[str, list[dict[str, Any]]]:
     connection = duckdb.connect()
     try:
         for table, expected_schema in SOURCE_SCHEMAS.items():
-            path = str(source_dir / f"{table}.parquet").replace("'", "''")
+            filename = SOURCE_FILENAMES.get(table, f"{table}.parquet")
+            path = str(source_dir / filename).replace("'", "''")
             description = connection.execute(
                 f"DESCRIBE SELECT * FROM read_parquet('{path}')"
             ).fetchall()
             actual_schema = {row[0]: row[1].upper() for row in description}
-            if actual_schema != expected_schema:
+            optional_columns = ("stage", "stage_order") if table == "matches" else ()
+            supported_schemas = [
+                {
+                    column: dtype
+                    for column, dtype in expected_schema.items()
+                    if column not in omitted_columns
+                }
+                for omitted_count in range(len(optional_columns) + 1)
+                for omitted_columns in combinations(optional_columns, omitted_count)
+            ]
+            if actual_schema not in supported_schemas:
                 raise ImportValidationError(
-                    f"Unexpected schema for {table}.parquet: "
-                    f"expected {expected_schema}, got {actual_schema}"
+                    f"Unexpected schema for {filename}: "
+                    f"expected {expected_schema} with optional columns "
+                    f"{sorted(optional_columns)}, "
+                    f"got {actual_schema}"
                 )
 
             columns = list(expected_schema)
+            selected_columns = [
+                quote_identifier(column)
+                if column in actual_schema
+                else f"NULL AS {quote_identifier(column)}"
+                for column in columns
+            ]
             query = (
-                f"SELECT {', '.join(quote_identifier(c) for c in columns)} "
+                f"SELECT {', '.join(selected_columns)} "
                 f"FROM read_parquet('{path}')"
             )
             cursor = connection.execute(query)
@@ -447,6 +516,18 @@ def real_value(value: Any, field: str, *, nullable: bool = False) -> float | Non
     if not math.isfinite(result):
         raise ImportValidationError(f"{field} must be finite; received {value!r}")
     return result
+
+
+def boolean_value(value: Any, field: str, *, nullable: bool = False) -> bool | None:
+    if value is None:
+        if nullable:
+            return None
+        raise ImportValidationError(f"{field} cannot be NULL")
+    if not isinstance(value, bool):
+        raise ImportValidationError(
+            f"{field} must be a boolean; received {type(value).__name__}"
+        )
+    return value
 
 
 def create_player_mappings(
@@ -612,6 +693,8 @@ def load_data(
             (
                 match_id,
                 text_value(row["match_date"], "matches.match_date"),
+                text_value(row["stage"], "matches.stage", nullable=True),
+                integer_value(row["stage_order"], "matches.stage_order", nullable=True),
                 text_value(row["match_format"], "matches.match_format"),
                 text_value(row["team_1_name"], "matches.team_1_name"),
                 text_value(row["team_2_name"], "matches.team_2_name"),
@@ -644,12 +727,99 @@ def load_data(
         connection,
         "matches",
         (
-            "match_id", "match_date", "match_format", "team_1_name", "team_2_name",
+            "match_id", "match_date", "stage", "stage_order", "match_format",
+            "team_1_name", "team_2_name",
             "winner_name", "venue_name", "city", "margin", "margin_type",
             "toss_winner_name", "toss_decision", "gender", "umpire_1_name",
             "umpire_2_name", "match_referee_name", "tournament_id",
         ),
         match_rows,
+    )
+
+    player_ids_by_cricsheet_id = {
+        cricsheet_player_id: player_id
+        for player_id, cricsheet_player_id in connection.execute(
+            "SELECT player_id, cricsheet_player_id FROM players"
+        )
+    }
+    matches_by_id = {
+        integer_value(row["match_id"], "matches.match_id"): row
+        for row in data["matches"]
+    }
+    match_player_rows = []
+    for row in data["match_players"]:
+        match_id = integer_value(row["match_id"], "match_players.match_id")
+        tournament_id = integer_value(
+            row["tournament_id"], "match_players.tournament_id"
+        )
+        player_name = text_value(row["player_name"], "match_players.player_name")
+        cricsheet_player_id = text_value(
+            row["cricsheet_player_id"], "match_players.cricsheet_player_id"
+        )
+        team_name = text_value(row["team_name"], "match_players.team_name")
+        match = matches_by_id.get(match_id)
+        if match is None:
+            raise ImportValidationError(
+                f"Missing match {match_id} referenced by match_players"
+            )
+        if tournament_id != integer_value(
+            match["tournament_id"], f"matches.match_id={match_id}.tournament_id"
+        ):
+            raise ImportValidationError(
+                f"match_players tournament {tournament_id} does not match "
+                f"match {match_id}"
+            )
+        if team_name not in (match["team_1_name"], match["team_2_name"]):
+            raise ImportValidationError(
+                f"Team {team_name!r} is not listed for match {match_id}"
+            )
+        if cricsheet_player_id not in player_ids_by_cricsheet_id:
+            raise ImportValidationError(
+                f"Missing Cricsheet player ID {cricsheet_player_id!r} "
+                f"for {player_name!r}"
+            )
+        match_player_rows.append(
+            (
+                match_id,
+                tournament_id,
+                team_name,
+                player_name,
+                cricsheet_player_id,
+                text_value(
+                    row["bowling_attribute"],
+                    "match_players.bowling_attribute",
+                    nullable=True,
+                ),
+                text_value(
+                    row["batting_attribute"],
+                    "match_players.batting_attribute",
+                    nullable=True,
+                ),
+                (
+                    int(boolean_value(
+                        row["is_wicketkeeper"],
+                        "match_players.is_wicketkeeper",
+                        nullable=True,
+                    ))
+                    if row["is_wicketkeeper"] is not None
+                    else None
+                ),
+            )
+        )
+    insert_source_rows(
+        connection,
+        "match_players",
+        (
+            "match_id",
+            "tournament_id",
+            "team_name",
+            "player_name",
+            "cricsheet_player_id",
+            "bowling_attribute",
+            "batting_attribute",
+            "is_wicketkeeper",
+        ),
+        match_player_rows,
     )
 
     innings_rows = [
@@ -887,6 +1057,8 @@ def load_data(
         ("match_id", "player_id"),
         match_recipients,
     )
+    for statement in CREATE_INDEX_STATEMENTS:
+        connection.execute(statement)
     return {
         "scorecard_and_stat_player_names_resolved": (
             len(data["batting_scorecards"])
@@ -949,12 +1121,27 @@ def validate_database(
             f"Duplicate primary keys found: {duplicate_primary_keys}"
         )
 
+    attribute_conflicts = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM (
+            SELECT cricsheet_player_id
+            FROM match_players
+            GROUP BY cricsheet_player_id
+            HAVING COUNT(DISTINCT bowling_attribute) > 1
+                OR COUNT(DISTINCT batting_attribute) > 1
+                OR COUNT(DISTINCT is_wicketkeeper) > 1
+        )
+        """
+    ).fetchone()[0]
+
     return {
         "row_counts": counts,
         "source_row_counts": expected_counts,
         "foreign_key_violations": len(foreign_key_errors),
         "sqlite_integrity_check": integrity_result,
         "duplicate_primary_keys": duplicate_primary_keys,
+        "players_with_attribute_conflicts": attribute_conflicts,
         "all_source_records_imported": True,
     }
 
@@ -993,7 +1180,7 @@ def main() -> int:
         "--source-dir",
         type=Path,
         default=DEFAULT_SOURCE_DIR,
-        help=f"Directory containing the nine Parquet files (default: {DEFAULT_SOURCE_DIR})",
+        help=f"Directory containing the Parquet files (default: {DEFAULT_SOURCE_DIR})",
     )
     parser.add_argument(
         "--database",

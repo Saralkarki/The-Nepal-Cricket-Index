@@ -1,0 +1,258 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Nepal Premier League · Tournament Overview{% endblock %}
+
+{% block content %}
+<section class="page-section npl-overview">
+    <a class="match-back-link" href="{% url 'cricket_nepal:tournaments' %}">← Tournaments</a>
+
+    <header class="tournament-hero">
+        <div>
+            <p class="eyebrow section-eyebrow">Tournament overview</p>
+            <h1>Nepal Premier League</h1>
+            <p class="section-intro">Match, team and player records across the NPL seasons represented in the dataset.</p>
+        </div>
+        <form class="player-season-filter" method="get" aria-label="Select NPL season">
+            <label for="npl-season-filter">Season</label>
+            <select id="npl-season-filter" name="season_id">
+                <option value="">Overall</option>
+                {% for season in overview.seasons %}
+                <option value="{{ season.tournament_id }}"{% if selected_season.tournament_id == season.tournament_id %} selected{% endif %}>{{ season.season }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+        </form>
+    </header>
+
+    <nav class="tournament-shortcuts" aria-label="Nepal Premier League sections">
+        {% if selected_season %}
+        <a href="{% url 'cricket_nepal:matches' %}?tournament_id={{ selected_season.tournament_id }}">NPL matches <span aria-hidden="true">→</span></a>
+        {% else %}
+        <a href="{% url 'cricket_nepal:matches' %}">NPL matches <span aria-hidden="true">→</span></a>
+        {% endif %}
+        <a href="{% url 'cricket_nepal:teams' %}">NPL teams <span aria-hidden="true">→</span></a>
+        <a href="{% url 'cricket_nepal:players' %}">Player profiles <span aria-hidden="true">→</span></a>
+    </nav>
+
+    <section class="player-stats-section" aria-labelledby="npl-summary-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Tournament summary</p>
+                <h2 id="npl-summary-heading">{% if selected_season %}{{ selected_season.season }}{% else %}All NPL seasons{% endif %}</h2>
+            </div>
+        </div>
+        <dl class="npl-summary-grid">
+            <div><dt>Matches</dt><dd>{{ overview.summary.matches }}</dd></div>
+            <div><dt>Teams</dt><dd>{{ overview.summary.teams }}</dd></div>
+            <div><dt>Players</dt><dd>{{ overview.summary.players }}</dd></div>
+            <div><dt>Total runs</dt><dd>{{ overview.summary.total_runs }}</dd></div>
+        </dl>
+    </section>
+
+    {% if overview.champions %}
+    <section class="npl-champions" aria-labelledby="npl-champions-heading">
+        <div class="npl-champions-heading">
+            <p class="eyebrow">The title winners</p>
+            <h2 id="npl-champions-heading">{% if selected_season %}{{ selected_season.season }} champion{% else %}NPL champions{% endif %}</h2>
+        </div>
+        <div class="npl-champion-list">
+            {% for champion in overview.champions %}
+            <article class="npl-champion-card">
+                <span class="npl-champion-medal" aria-hidden="true">NPL</span>
+                <div class="npl-champion-details">
+                    <p class="npl-champion-season">{{ champion.season }} · Champions</p>
+                    <h3><a href="{% url 'cricket_nepal:team_profile' champion.team_slug %}">{{ champion.team_name }}</a></h3>
+                    <p class="npl-champion-result">
+                        {% if champion.winner_score is not None and champion.opponent_score is not None %}
+                        {{ champion.winner_score }}–{{ champion.opponent_score }} vs {{ champion.opponent }}
+                        {% else %}
+                        Defeated {{ champion.opponent }}
+                        {% endif %}
+                        {% if champion.margin %} · Won by {{ champion.margin }} {{ champion.margin_type }}{% endif %}
+                    </p>
+                </div>
+                <a class="npl-champion-match" href="{% url 'cricket_nepal:match_detail' champion.match_id %}">
+                    Final · {{ champion.match_date }} <span aria-hidden="true">→</span>
+                </a>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if selected_season %}
+    <section class="player-stats-section" aria-labelledby="npl-points-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">League stage</p>
+                <h2 id="npl-points-heading">Points table · {{ selected_season.season }}</h2>
+            </div>
+        </div>
+        {% if overview.points_table %}
+        <div class="team-table-scroll">
+            <table class="npl-points-table">
+                <thead><tr><th>Team</th><th>Played</th><th>Won</th><th>Lost</th><th>Points</th><th>NRR</th></tr></thead>
+                <tbody>
+                    {% for row in overview.points_table %}
+                    <tr>
+                        <td><a href="{% url 'cricket_nepal:team_profile' row.team_slug %}">{{ row.team_name }}</a></td>
+                        <td>{{ row.played }}</td>
+                        <td>{{ row.won }}</td>
+                        <td>{{ row.lost }}</td>
+                        <td>{{ row.points }}</td>
+                        <td>{{ row.net_run_rate|floatformat:3 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="team-qualification-note">NRR uses matches labelled League Stage or Round Robin: aggregate runs per over scored minus aggregate runs per over conceded. All-out innings count as the full 20-over quota; super overs and no-result matches are excluded. NPL-specific playing conditions for shortened innings are not available, so the standard T20 convention is used.</p>
+        {% else %}
+        <p class="player-empty-state">{{ overview.points_table_limitation }}</p>
+        {% endif %}
+    </section>
+    {% else %}
+    <section class="player-stats-section">
+        <p class="eyebrow section-eyebrow">Separate season competitions</p>
+        <p class="section-intro">Points and net run rates are shown for individual seasons only; they are not combined across different competitions.</p>
+    </section>
+    {% endif %}
+
+    <section class="player-stats-section" aria-labelledby="npl-leaders-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Season leaders</p>
+                <h2 id="npl-leaders-heading">Batting and bowling leaders</h2>
+            </div>
+        </div>
+        <div class="npl-leader-columns">
+            <section>
+                <h3>Batting</h3>
+                <div class="npl-leader-grid">
+                    <article class="team-leader-card">
+                        <h4>Most runs</h4>
+                        {% for leader in overview.batting_leaders.runs %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.runs }}</strong></p>
+                        <small>{{ leader.matches }} matches</small>
+                        {% empty %}<p class="player-muted">No batting records.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best batting average</h4>
+                        {% for leader in overview.batting_leaders.average %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.average|floatformat:2 }}</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.dismissals }} dismissals</small>
+                        {% empty %}<p class="player-muted">No qualified player.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best strike rate</h4>
+                        {% for leader in overview.batting_leaders.strike_rate %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.strike_rate|floatformat:2 }}</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.balls_faced }} balls</small>
+                        {% empty %}<p class="player-muted">No qualified player.</p>{% endfor %}
+                    </article>
+                </div>
+                <p class="team-qualification-note">Average requires 3 dismissals; strike rate requires 60 balls faced.</p>
+            </section>
+            <section>
+                <h3>Bowling</h3>
+                <div class="npl-leader-grid">
+                    <article class="team-leader-card">
+                        <h4>Most wickets</h4>
+                        {% for leader in overview.bowling_leaders.wickets %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.wickets }}</strong></p>
+                        <small>{{ leader.matches }} matches</small>
+                        {% empty %}<p class="player-muted">No bowling records.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best economy</h4>
+                        {% for leader in overview.bowling_leaders.economy %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.economy|floatformat:2 }}</strong></p>
+                        <small>{{ leader.matches }} matches · {{ leader.legal_balls }} balls</small>
+                        {% empty %}<p class="player-muted">No qualified player.</p>{% endfor %}
+                    </article>
+                    <article class="team-leader-card">
+                        <h4>Best bowling figures</h4>
+                        {% for leader in overview.bowling_leaders.figures %}
+                        <p><a href="{% url 'cricket_nepal:player_profile' leader.player_id %}">{{ leader.player_name }}</a><strong>{{ leader.wickets }}/{{ leader.runs_conceded }}</strong></p>
+                        <small><a href="{% url 'cricket_nepal:match_detail' leader.match_id %}">vs {{ leader.opponent }} · {{ leader.match_date }}</a></small>
+                        {% empty %}<p class="player-muted">No bowling records.</p>{% endfor %}
+                    </article>
+                </div>
+                <p class="team-qualification-note">Economy requires at least 12 overs bowled.</p>
+            </section>
+        </div>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="npl-statistics-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Competition records</p>
+                <h2 id="npl-statistics-heading">Tournament statistics</h2>
+            </div>
+        </div>
+        <dl class="npl-record-grid">
+            <div><dt>Total wickets</dt><dd>{{ overview.summary.total_wickets }}</dd></div>
+            <div><dt>Average first-innings score</dt><dd>{{ overview.statistics.average_first_innings_score|floatformat:1|default_if_none:"—" }}</dd></div>
+            <div><dt>Highest team total</dt><dd>{{ overview.statistics.highest_team_total|default_if_none:"—" }}</dd></div>
+            <div><dt>Highest individual score</dt><dd>{{ overview.statistics.highest_individual_score|default_if_none:"—" }}</dd></div>
+            <div><dt>Best bowling figures</dt><dd>{% for leader in overview.statistics.best_bowling_figures %}{{ leader.wickets }}/{{ leader.runs_conceded }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd></div>
+            <div><dt>Batting dot-ball %</dt><dd>{{ overview.statistics.batting_dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if overview.statistics.batting_dot_ball_percentage is not None %}%{% endif %}</dd></div>
+            <div><dt>Bowling dot-ball %</dt><dd>{{ overview.statistics.bowling_dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if overview.statistics.bowling_dot_ball_percentage is not None %}%{% endif %}</dd></div>
+        </dl>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="npl-recent-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Latest fixtures</p>
+                <h2 id="npl-recent-heading">Recent matches</h2>
+            </div>
+            <span class="player-muted">Most recent first</span>
+        </div>
+        {% if overview.recent_matches %}
+        <ol class="npl-recent-list">
+            {% for match in overview.recent_matches %}
+            <li>
+                <a href="{% url 'cricket_nepal:match_detail' match.match_id %}">
+                    <time datetime="{{ match.match_date }}">{{ match.match_date }}</time>
+                    <span>{{ match.team_1_name }} {{ match.team_1_score|default_if_none:"—" }} – {{ match.team_2_score|default_if_none:"—" }} {{ match.team_2_name }}</span>
+                    <strong>{{ match.result }}</strong>
+                    <span>Player of the Match: {{ match.player_of_match|default:"Not recorded" }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
+        {% else %}
+        <p class="player-empty-state">No recent matches found.</p>
+        {% endif %}
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="npl-comparison-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Across seasons</p>
+                <h2 id="npl-comparison-heading">Season comparison</h2>
+            </div>
+        </div>
+        <div class="team-table-scroll">
+            <table class="npl-comparison-table">
+                <thead><tr><th>Season</th><th>Matches</th><th>Total runs</th><th>Scoring rate</th><th>Avg. first innings</th><th>Batting dot-ball %</th><th>Bowling dot-ball %</th><th>Most league wins</th></tr></thead>
+                <tbody>
+                    {% for season in overview.season_comparison %}
+                    <tr>
+                        <td>{{ season.season }}</td>
+                        <td>{{ season.matches }}</td>
+                        <td>{{ season.total_runs }}</td>
+                        <td>{{ season.scoring_rate|floatformat:2|default_if_none:"—" }}</td>
+                        <td>{{ season.average_first_innings_score|floatformat:1|default_if_none:"—" }}</td>
+                        <td>{{ season.batting_dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if season.batting_dot_ball_percentage is not None %}%{% endif %}</td>
+                        <td>{{ season.bowling_dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if season.bowling_dot_ball_percentage is not None %}%{% endif %}</td>
+                        <td>{% for team in season.top_team %}{{ team.team_name }} ({{ team.won }}){% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</section>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#102522">
+    <title>{% block title %}Nepal Cricket Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'cricket_nepal/css/site.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+        <div class="header-inner">
+            <a class="brand" href="{% url 'cricket_nepal:home' %}" aria-label="Nepal Cricket Dashboard home">
+                <span class="brand-mark" aria-hidden="true">NC</span>
+                <span class="brand-name">Nepal Cricket <span>Dashboard</span></span>
+            </a>
+            <nav class="primary-nav" aria-label="Main navigation">
+                <a href="{% url 'cricket_nepal:home' %}#overview">Overview</a>
+                <a href="{% url 'cricket_nepal:home' %}#matches">Matches</a>
+                <a href="{% url 'cricket_nepal:home' %}#players">Players</a>
+                <a href="{% url 'cricket_nepal:home' %}#teams">Teams</a>
+                <a href="{% url 'cricket_nepal:home' %}#batting">Batting</a>
+                <a href="{% url 'cricket_nepal:home' %}#bowling">Bowling</a>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <a class="footer-brand" href="{% url 'cricket_nepal:home' %}">Nepal Cricket Dashboard</a>
+            <p>Cricket, considered through the numbers.</p>
+            <p class="attribution">
+                Data-source reference:
+                <a href="https://cricsheet.org/" target="_blank" rel="noopener noreferrer">Cricsheet</a>.
+                Dataset integration and licence details will be confirmed before statistics are published.
+            </p>
+            <span class="footer-note">NPL · Seasons 1—2</span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -539,7 +539,7 @@ class PlayerProfileTests(SimpleTestCase):
                 {
                     "player_id": 25,
                     "total_runs": 100,
-                    "matches_played": 4,
+                    "strike_rate": 100.0,
                     "dot_ball_percentage": 20.0,
                     "total_fours": 10,
                     "total_sixes": 2,
@@ -547,7 +547,7 @@ class PlayerProfileTests(SimpleTestCase):
                 {
                     "player_id": 26,
                     "total_runs": 200,
-                    "matches_played": 2,
+                    "strike_rate": 150.0,
                     "dot_ball_percentage": 10.0,
                     "total_fours": 5,
                     "total_sixes": 0,
@@ -558,6 +558,7 @@ class PlayerProfileTests(SimpleTestCase):
                     "player_id": 25,
                     "wickets": 5,
                     "matches_bowled": 4,
+                    "strike_rate": 12.0,
                     "economy": 6.0,
                     "maidens": 1,
                     "dot_ball_percentage": 20.0,
@@ -566,6 +567,7 @@ class PlayerProfileTests(SimpleTestCase):
                     "player_id": 26,
                     "wickets": 3,
                     "matches_bowled": 2,
+                    "strike_rate": 8.0,
                     "economy": 9.0,
                     "maidens": 3,
                     "dot_ball_percentage": 50.0,
@@ -599,22 +601,33 @@ class PlayerProfileTests(SimpleTestCase):
         self.assertTrue(bowling["available"])
         self.assertEqual(
             [axis["normalized"] for axis in batting["axes"]],
-            [0, 100, 0, 100, 100],
+            [0, 0, 0, 100, 100],
         )
         self.assertEqual(
             [axis["normalized"] for axis in bowling["axes"]],
-            [100, 100, 100, 0, 100],
+            [100, 0, 100, 0, 100],
         )
         self.assertEqual(batting["axes"][0]["tooltip"], "Total runs: 100")
+        self.assertEqual(batting["axes"][1]["label"], "Strike Rate")
+        self.assertEqual(batting["axes"][1]["value"], 100.0)
+        self.assertEqual(batting["axes"][1]["actual"], "100")
+        self.assertEqual(batting["axes"][1]["tooltip"], "Strike Rate: 100")
+        self.assertEqual(bowling["axes"][1]["label"], "Bowling Strike Rate")
+        self.assertEqual(bowling["axes"][1]["value"], 12.0)
+        self.assertEqual(bowling["axes"][1]["actual"], "12")
+        self.assertEqual(bowling["axes"][1]["tooltip"], "Bowling Strike Rate: 12")
         self.assertEqual(batting["season_label"], "2024/25")
         self.assertContains(response, "batting-radar-data")
         self.assertContains(response, "bowling-radar-data")
+        self.assertContains(response, '<option value="">Overall</option>')
         self.assertContains(response, "Total runs: 100")
         self.assertContains(response, "Economy: 6")
 
     def test_radar_charts_use_the_other_selected_season(self):
         cohort = self._radar_cohort()
         cohort["batting"][0]["total_runs"] = 300
+        cohort["batting"][0]["strike_rate"] = 125.0
+        cohort["bowling"][0]["strike_rate"] = 7.0
         with (
             patch("cricket_nepal.views.get_player_profile", return_value=self.profile),
             patch(
@@ -638,7 +651,10 @@ class PlayerProfileTests(SimpleTestCase):
         self.assertEqual(charts["batting"]["season_label"], "2025/26")
         self.assertEqual(charts["batting"]["axes"][0]["value"], 300)
         self.assertEqual(charts["batting"]["axes"][0]["normalized"], 100)
+        self.assertEqual(charts["batting"]["axes"][1]["value"], 125.0)
         self.assertEqual(charts["bowling"]["season_label"], "2025/26")
+        self.assertEqual(charts["bowling"]["axes"][1]["value"], 7.0)
+        self.assertEqual(charts["bowling"]["axes"][1]["normalized"], 100)
 
     def test_combined_radar_cohort_and_missing_metrics_are_not_zero_filled(self):
         from cricket_nepal.views import _build_radar_chart
@@ -648,7 +664,7 @@ class PlayerProfileTests(SimpleTestCase):
                 {
                     "player_id": 25,
                     "total_runs": 0,
-                    "matches_played": 1,
+                    "strike_rate": None,
                     "dot_ball_percentage": None,
                     "total_fours": 0,
                     "total_sixes": 0,
@@ -656,7 +672,7 @@ class PlayerProfileTests(SimpleTestCase):
                 {
                     "player_id": 26,
                     "total_runs": 0,
-                    "matches_played": 2,
+                    "strike_rate": None,
                     "dot_ball_percentage": 50.0,
                     "total_fours": 1,
                     "total_sixes": 0,
@@ -684,6 +700,8 @@ class PlayerProfileTests(SimpleTestCase):
         self.assertEqual(chart["season_label"], "All seasons")
         self.assertTrue(chart["available"])
         self.assertEqual(chart["axes"][0]["normalized"], 100)
+        self.assertEqual(chart["axes"][1]["normalized"], None)
+        self.assertEqual(chart["axes"][1]["actual"], "Not available")
         self.assertEqual(chart["axes"][2]["normalized"], None)
         self.assertEqual(chart["axes"][2]["actual"], "Not available")
         self.assertFalse(response.context["radar_charts"]["bowling"]["available"])

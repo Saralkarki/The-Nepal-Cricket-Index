@@ -141,6 +141,16 @@
             </div>
             <span class="player-muted">Normalized against {{ radar_charts.batting.season_label }} player statistics</span>
         </div>
+        <form class="player-season-filter" method="get">
+            <label for="season-filter">Season</label>
+            <select id="season-filter" name="season_id">
+                <option value="">Overall</option>
+                {% for participation in profile.participations %}
+                <option value="{{ participation.tournament_id }}"{% if selected_season.tournament_id == participation.tournament_id %} selected{% endif %}>{{ participation.season }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+        </form>
         <div class="player-radar-grid">
             <article class="player-radar-card">
                 <h3>Batting</h3>
@@ -180,17 +190,6 @@
                 <h2 id="performance-heading">Match-by-match performance</h2>
             </div>
         </div>
-        <form class="player-season-filter" method="get">
-            <label for="season-filter">Season</label>
-            <select id="season-filter" name="season_id">
-                <option value="">All seasons</option>
-                {% for participation in profile.participations %}
-                <option value="{{ participation.tournament_id }}"{% if selected_season.tournament_id == participation.tournament_id %} selected{% endif %}>{{ participation.season }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">Apply</button>
-        </form>
-
         <div class="player-performance-group">
             <h3>Batting</h3>
             {% if performance.batting %}

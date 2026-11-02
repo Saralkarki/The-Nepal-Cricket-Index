@@ -571,7 +571,12 @@ def get_player_radar_comparison(
             """
             SELECT player_id,
                    SUM(total_runs) AS total_runs,
-                   SUM(matches_played) AS matches_played,
+                   CASE
+                       WHEN %s IS NULL THEN
+                           SUM(total_runs) * 100.0
+                           / NULLIF(SUM(total_balls_faced), 0)
+                       ELSE MAX(batting_strike_rate)
+                   END AS strike_rate,
                    SUM(total_dot_balls) AS total_dot_balls,
                    SUM(total_balls_faced) AS total_balls_faced,
                    SUM(total_fours) AS total_fours,
@@ -586,7 +591,7 @@ def get_player_radar_comparison(
             WHERE (%s IS NULL OR tournament_id = %s)
             GROUP BY player_id
             """,
-            [tournament_id, tournament_id, tournament_id],
+            [tournament_id, tournament_id, tournament_id, tournament_id],
         )
         batting = _rows_as_dicts(cursor)
 
@@ -597,6 +602,11 @@ def get_player_radar_comparison(
                    SUM(matches_played) AS matches_bowled,
                    SUM(runs_conceded) AS runs_conceded,
                    SUM(total_legal_balls) AS total_legal_balls,
+                   CASE
+                       WHEN %s IS NULL THEN
+                           SUM(total_legal_balls) * 1.0 / NULLIF(SUM(wickets), 0)
+                       ELSE MAX(bowling_strike_rate)
+                   END AS strike_rate,
                    SUM(maidens) AS maidens,
                    SUM(total_dot_balls) AS total_dot_balls,
                    CASE
@@ -615,7 +625,13 @@ def get_player_radar_comparison(
             WHERE (%s IS NULL OR tournament_id = %s)
             GROUP BY player_id
             """,
-            [tournament_id, tournament_id, tournament_id, tournament_id],
+            [
+                tournament_id,
+                tournament_id,
+                tournament_id,
+                tournament_id,
+                tournament_id,
+            ],
         )
         bowling = _rows_as_dicts(cursor)
 

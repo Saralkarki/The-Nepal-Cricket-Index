@@ -16,7 +16,7 @@ from cricket_nepal.data_access import (
 
 BATTER_RADAR_AXES = (
     ("Total runs", "total_runs", True, ""),
-    ("Matches played", "matches_played", True, ""),
+    ("Strike Rate", "strike_rate", True, ""),
     ("Dot-ball %", "dot_ball_percentage", False, "%"),
     ("Fours", "total_fours", True, ""),
     ("Sixes", "total_sixes", True, ""),
@@ -24,7 +24,7 @@ BATTER_RADAR_AXES = (
 
 BOWLER_RADAR_AXES = (
     ("Wickets", "wickets", True, ""),
-    ("Matches bowled", "matches_bowled", True, ""),
+    ("Bowling Strike Rate", "strike_rate", False, ""),
     ("Economy", "economy", False, ""),
     ("Maidens", "maidens", True, ""),
     ("Dot-ball %", "dot_ball_percentage", False, "%"),

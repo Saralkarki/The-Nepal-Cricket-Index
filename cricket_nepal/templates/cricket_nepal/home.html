@@ -1,0 +1,138 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Overview · Nepal Cricket Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero" id="overview">
+    <div class="hero-inner">
+        <div class="hero-copy">
+            <p class="eyebrow"><span class="eyebrow-rule" aria-hidden="true"></span>Nepal Premier League · 2024—2025</p>
+            <h1>The story of Nepal cricket, <span>in numbers.</span></h1>
+            <p class="hero-description">
+                A considered look at the matches, players, teams and performances shaping the Nepal Premier League.
+            </p>
+            <a class="text-link hero-link" href="#season-overview">Explore the seasons <span aria-hidden="true">↓</span></a>
+        </div>
+        <aside class="season-board" aria-label="Dashboard coverage">
+            <div class="board-topline">
+                <span>THE NPL ARCHIVE</span>
+                <span>01 — 02</span>
+            </div>
+            <div class="board-feature">
+                <span class="board-number">02</span>
+                <div>
+                    <p class="board-kicker">Seasons in focus</p>
+                    <p class="board-years">2024 <span>—</span> 2025</p>
+                </div>
+            </div>
+            <div class="board-season">
+                <span class="season-index">01</span>
+                <span>NPL Season 1</span>
+                <span class="season-year">2024</span>
+            </div>
+            <div class="board-season">
+                <span class="season-index">02</span>
+                <span>NPL Season 2</span>
+                <span class="season-year">2025</span>
+            </div>
+            <p class="board-footnote">Two seasons. One growing game.</p>
+        </aside>
+    </div>
+</section>
+
+<section class="overview-section page-section" id="season-overview">
+    <div class="section-heading overview-heading">
+        <div>
+            <p class="eyebrow section-eyebrow">01 / Season overview</p>
+            <h2>A season, at a glance.</h2>
+            <p class="section-intro">The essential numbers, brought together in one place.</p>
+        </div>
+        <form class="season-form" method="get" action="{% url 'cricket_nepal:home' %}">
+            <label for="season">Tournament season</label>
+            <div class="season-form-controls">
+                <select id="season" name="season">
+                    {% for season in seasons %}
+                    <option value="{{ season.year }}"{% if season.year == selected_year %} selected{% endif %}>
+                        {{ season.name }} ({{ season.year }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit">View season</button>
+            </div>
+        </form>
+    </div>
+
+    <p class="selected-season-note">
+        Showing the overview for <strong>{{ selected_season.label }}</strong>.
+        Verified statistics will appear here when the data layer is connected.
+    </p>
+
+    <div class="stats-grid" aria-label="Season statistics">
+        <article class="stat-item">
+            <p class="stat-label">Matches</p>
+            <p class="stat-value" aria-label="Not available yet">—</p>
+            <p class="stat-note">Season match count</p>
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Players</p>
+            <p class="stat-value" aria-label="Not available yet">—</p>
+            <p class="stat-note">Players featured</p>
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Teams</p>
+            <p class="stat-value" aria-label="Not available yet">—</p>
+            <p class="stat-note">Teams competing</p>
+        </article>
+        <article class="stat-item">
+            <p class="stat-label">Season</p>
+            <p class="stat-value stat-season">{{ selected_year }}</p>
+            <p class="stat-note">Nepal Premier League</p>
+        </article>
+    </div>
+</section>
+
+<section class="explore-section page-section" aria-labelledby="explore-heading">
+    <div class="section-heading explore-heading">
+        <div>
+            <p class="eyebrow section-eyebrow">02 / Explore the game</p>
+            <h2 id="explore-heading">Every angle of the season.</h2>
+        </div>
+        <p class="section-intro explore-intro">
+            From the result to the individual performance, explore the detail behind each season.
+        </p>
+    </div>
+
+    <div class="feature-grid">
+        <article class="feature-item" id="matches">
+            <span class="feature-index">01</span>
+            <h3>Matches</h3>
+            <p>Results, scorecards and the moments that shaped each fixture.</p>
+            <span class="feature-status">Statistics coming soon</span>
+        </article>
+        <article class="feature-item" id="players">
+            <span class="feature-index">02</span>
+            <h3>Players</h3>
+            <p>Follow player performances and season-by-season contributions.</p>
+            <span class="feature-status">Statistics coming soon</span>
+        </article>
+        <article class="feature-item" id="teams">
+            <span class="feature-index">03</span>
+            <h3>Teams</h3>
+            <p>Compare team records and the numbers behind each campaign.</p>
+            <span class="feature-status">Statistics coming soon</span>
+        </article>
+        <article class="feature-item" id="batting">
+            <span class="feature-index">04</span>
+            <h3>Batting</h3>
+            <p>Runs, averages and scoring rates, grounded in verified scorecards.</p>
+            <span class="feature-status">Statistics coming soon</span>
+        </article>
+        <article class="feature-item" id="bowling">
+            <span class="feature-index">05</span>
+            <h3>Bowling</h3>
+            <p>Wickets, economy and the performances that changed a match.</p>
+            <span class="feature-status">Statistics coming soon</span>
+        </article>
+    </div>
+</section>
+{% endblock %}

@@ -82,7 +82,14 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    },
+    'cricket': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': f"{(BASE_DIR / 'data' / 'nepal_cricket.db').as_uri()}?mode=ro",
+        'OPTIONS': {
+            'uri': True,
+        },
+    },
 }
 
 

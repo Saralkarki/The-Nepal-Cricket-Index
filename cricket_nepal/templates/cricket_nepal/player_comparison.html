@@ -1,0 +1,103 @@
+{% extends "cricket_nepal/base.html" %}
+{% load static %}
+
+{% block title %}Player Comparison · Nepal Cricket Dataset{% endblock %}
+
+{% block content %}
+<section
+    class="page-section player-comparison-page"
+    data-comparison-data-url="{{ comparison_data_url }}"
+    data-player-search-url="{{ player_search_url }}"
+>
+    <header class="player-statistics-header">
+        <p class="eyebrow section-eyebrow">Dataset-wide analysis</p>
+        <h1>Player Comparison</h1>
+        <p class="section-intro">Compare batting and bowling performances across tournaments and seasons.</p>
+    </header>
+
+    <section class="comparison-selection-section" aria-labelledby="comparison-selection-title">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Choose players</p>
+                <h2 id="comparison-selection-title">Build your comparison</h2>
+            </div>
+        </div>
+        <div class="comparison-player-strip" id="comparison-player-cards" aria-label="Player selections">
+            <button type="button" id="comparison-add-player">Add Player</button>
+        </div>
+    </section>
+
+    <form class="comparison-filter-bar" id="comparison-filters" aria-label="Filter player comparison">
+        <label>
+            <span>Tournament</span>
+            <select name="tournament">
+                <option value="">All Tournaments</option>
+                {% for tournament in statistics.tournament_options %}
+                <option value="{{ tournament }}">{{ tournament }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Season</span>
+            <select name="season">
+                <option value="">All Seasons</option>
+                {% for season in statistics.season_options %}
+                <option value="{{ season }}">{{ season }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span>Team</span>
+            <select name="team">
+                <option value="">All Teams</option>
+                {% for team in statistics.team_options %}
+                <option value="{{ team }}">{{ team }}</option>
+                {% endfor %}
+            </select>
+        </label>
+    </form>
+
+    <p class="comparison-status" id="comparison-status" role="status" aria-live="polite">
+        Select players to compare their statistics.
+    </p>
+
+    <div class="comparison-results" id="comparison-results" hidden>
+        <section class="comparison-stat-panel" aria-labelledby="comparison-batting-title">
+            <h2 class="comparison-panel-heading" id="comparison-batting-title">Batting Comparison</h2>
+            <div class="comparison-panel-content">
+                <div class="player-statistics-table-wrap comparison-table-wrap">
+                    <table class="comparison-table">
+                        <thead id="comparison-batting-head"></thead>
+                        <tbody id="comparison-batting-body"></tbody>
+                    </table>
+                </div>
+                <article class="comparison-chart-panel">
+                    <h3>Batting Radar</h3>
+                    <div class="comparison-chart" id="comparison-batting-chart"></div>
+                </article>
+            </div>
+        </section>
+
+        <section class="comparison-stat-panel" aria-labelledby="comparison-bowling-title">
+            <h2 class="comparison-panel-heading" id="comparison-bowling-title">Bowling Comparison</h2>
+            <div class="comparison-panel-content">
+                <div class="player-statistics-table-wrap comparison-table-wrap">
+                    <table class="comparison-table">
+                        <thead id="comparison-bowling-head"></thead>
+                        <tbody id="comparison-bowling-body"></tbody>
+                    </table>
+                </div>
+                <article class="comparison-chart-panel">
+                    <h3>Bowling Radar</h3>
+                    <div class="comparison-chart" id="comparison-bowling-chart"></div>
+                </article>
+            </div>
+        </section>
+        <p class="comparison-radar-note">Radar metrics are normalized across the selected players. Missing statistics are omitted from that metric.</p>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'cricket_nepal/js/player-comparison.js' %}" defer></script>
+{% endblock %}

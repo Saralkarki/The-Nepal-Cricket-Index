@@ -1,5 +1,6 @@
-from django.http import Http404
-from django.shortcuts import render
+from django.http import Http404, JsonResponse
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.text import slugify
 
 from cricket_nepal.data_access import (
@@ -7,10 +8,12 @@ from cricket_nepal.data_access import (
     get_npl_team_directory,
     get_team_profile,
     get_player_directory,
+    get_player_names,
     get_player_statistics,
     get_player_match_performance,
     get_player_profile,
     get_player_radar_comparison,
+    search_players,
     get_matches,
     get_match_scorecard,
     get_teams,
@@ -33,6 +36,24 @@ BOWLER_RADAR_AXES = (
     ("Economy", "economy", False, ""),
     ("Maidens", "maidens", True, ""),
     ("Dot-ball %", "dot_ball_percentage", False, "%"),
+)
+
+COMPARISON_BATTING_RADAR_AXES = (
+    ("Runs", "runs", True, ""),
+    ("Batting Average", "average", True, ""),
+    ("Strike Rate", "strike_rate", True, ""),
+    ("Fours", "fours", True, ""),
+    ("Sixes", "sixes", True, ""),
+    ("Dot-ball %", "dot_ball_percentage", False, "%"),
+)
+
+COMPARISON_BOWLING_RADAR_AXES = (
+    ("Wickets", "wickets", True, ""),
+    ("Bowling Average", "average", False, ""),
+    ("Economy", "economy", False, ""),
+    ("Bowling Strike Rate", "strike_rate", False, ""),
+    ("Maidens", "maidens", True, ""),
+    ("Dot-ball %", "dot_ball_percentage", True, "%"),
 )
 
 
@@ -217,6 +238,116 @@ def player_statistics(request, statistics_view="batting"):
                 "compare": "cricket_nepal:player_statistics_compare",
             }[statistics_view],
         },
+    )
+
+
+def player_statistics_compare(request):
+    return redirect("cricket_nepal:player_comparison")
+
+
+def player_comparison(request):
+    statistics = get_player_statistics(
+        minimum_matches=0,
+        player_ids=(),
+        include_best_performances=False,
+    )
+    return render(
+        request,
+        "cricket_nepal/player_comparison.html",
+        {
+            "statistics": statistics,
+            "comparison_data_url": reverse("cricket_nepal:player_comparison_data"),
+            "player_search_url": reverse("cricket_nepal:player_comparison_search"),
+        },
+    )
+
+
+def player_comparison_search(request):
+    players = search_players(request.GET.get("q", "")[:100])
+    return JsonResponse(
+        {
+            "players": [
+                {
+                    **player,
+                    "profile_url": reverse(
+                        "cricket_nepal:player_profile",
+                        args=[player["player_id"]],
+                    ),
+                }
+                for player in players
+            ]
+        }
+    )
+
+
+def player_comparison_data(request):
+    raw_player_ids = request.GET.getlist("player")
+    try:
+        player_ids = tuple(dict.fromkeys(int(value) for value in raw_player_ids))
+    except ValueError:
+        return JsonResponse({"error": "Player IDs must be integers."}, status=400)
+    if any(player_id <= 0 for player_id in player_ids):
+        return JsonResponse({"error": "Player IDs must be positive."}, status=400)
+
+    player_names = get_player_names(player_ids)
+    if len(player_names) != len(player_ids):
+        return JsonResponse({"error": "One or more players were not found."}, status=404)
+
+    statistics = get_player_statistics(
+        tournament_name=request.GET.get("tournament", "").strip()[:100],
+        season=request.GET.get("season", "").strip()[:30],
+        team_name=request.GET.get("team", "").strip()[:100],
+        minimum_matches=0,
+        player_ids=player_ids,
+        include_best_performances=False,
+    )
+    batting_rows = {row["player_id"]: row for row in statistics["batting"]}
+    bowling_rows = {row["player_id"]: row for row in statistics["bowling"]}
+    players = []
+    for player_id in player_ids:
+        batting = batting_rows.get(player_id)
+        bowling = bowling_rows.get(player_id)
+        batting_radar = _build_radar_chart(
+            statistics["batting"],
+            player_id,
+            COMPARISON_BATTING_RADAR_AXES,
+            "Selected comparison",
+        )
+        bowling_radar = _build_radar_chart(
+            statistics["bowling"],
+            player_id,
+            COMPARISON_BOWLING_RADAR_AXES,
+            "Selected comparison",
+        )
+        players.append(
+            {
+                "player_id": player_id,
+                "player_name": player_names[player_id],
+                "profile_url": reverse(
+                    "cricket_nepal:player_profile",
+                    args=[player_id],
+                ),
+                "batting": batting,
+                "bowling": bowling,
+                "radar": {
+                    "batting": batting_radar,
+                    "bowling": bowling_radar,
+                },
+            }
+        )
+
+    return JsonResponse(
+        {
+            "players": players,
+            "filters": {
+                "tournament_options": statistics["tournament_options"],
+                "season_options": statistics["season_options"],
+                "team_options": statistics["team_options"],
+                "selected_tournament": statistics["selected_tournament"],
+                "selected_season": statistics["selected_season"],
+                "selected_team": statistics["selected_team"],
+            },
+        }
     )
 
 

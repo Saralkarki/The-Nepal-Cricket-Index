@@ -2034,15 +2034,11 @@ class PlayerStatisticsPageTests(TestCase):
         compare_response = client.get(
             reverse("cricket_nepal:player_statistics_compare")
         )
-        compare_html = compare_response.content.decode()
-        self.assertEqual(compare_response.status_code, 200)
-        self.assertIn("Players Compare", compare_html)
-        self.assertIn(
-            "Side-by-side player comparisons will be added here",
-            compare_html,
+        self.assertEqual(compare_response.status_code, 302)
+        self.assertEqual(
+            compare_response["Location"],
+            reverse("cricket_nepal:player_comparison"),
         )
-        self.assertNotIn("Batting statistics", compare_html)
-        self.assertNotIn("Bowling statistics", compare_html)
 
     def test_player_statistics_header_has_three_separate_pages(self):
         response = Client().get(reverse("cricket_nepal:player_statistics"))
@@ -2051,9 +2047,9 @@ class PlayerStatisticsPageTests(TestCase):
         for page_name in (
             "player_statistics_batting",
             "player_statistics_bowling",
-            "player_statistics_compare",
         ):
             self.assertIn(reverse(f"cricket_nepal:{page_name}"), rendered)
+        self.assertIn(reverse("cricket_nepal:player_comparison"), rendered)
         self.assertNotIn('name="view"', rendered)
 
     def test_filters_reject_unknown_values_and_search_is_case_insensitive(self):
@@ -2078,3 +2074,277 @@ class PlayerStatisticsPageTests(TestCase):
                 for row in statistics["batting"]
             )
         )
+
+
+class PlayerComparisonPageTests(TestCase):
+    def test_comparison_page_has_two_initial_cards_and_shared_filters(self):
+        response = Client().get(reverse("cricket_nepal:player_comparison"))
+        self.assertEqual(response.status_code, 200)
+        rendered = response.content.decode()
+        self.assertIn("Build your comparison", rendered)
+        self.assertIn("Add Player", rendered)
+        self.assertIn("All Tournaments", rendered)
+        self.assertIn("All Seasons", rendered)
+        self.assertIn("All Teams", rendered)
+        self.assertIn("player-comparison.js", rendered)
+        script_path = (
+            Path(__file__).parent
+            / "static"
+            / "cricket_nepal"
+            / "js"
+            / "player-comparison.js"
+        )
+        script = script_path.read_text()
+        self.assertIn("addCard();\n    addCard();", script)
+
+    def test_player_search_returns_profile_links(self):
+        players = get_player_statistics(minimum_matches=0)["batting"]
+        player_name = players[0]["player_name"]
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_search"),
+            {"q": player_name[:4]},
+        )
+        self.assertEqual(response.status_code, 200)
+        matches = response.json()["players"]
+        self.assertTrue(matches)
+        self.assertTrue(
+            all(
+                "profile_url" in player
+                and player_name[:4].casefold() in player["player_name"].casefold()
+                for player in matches
+            )
+        )
+
+    def test_comparison_accepts_multiple_players_and_deduplicates_ids(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        player_ids = [
+            row["player_id"] for row in statistics["batting"][:3]
+        ]
+        self.assertEqual(len(set(player_ids)), 3)
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            [("player", player_ids[0]), ("player", player_ids[0])]
+            + [("player", player_id) for player_id in player_ids[1:]],
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            [player["player_id"] for player in payload["players"]],
+            player_ids,
+        )
+        self.assertTrue(all(player["profile_url"] for player in payload["players"]))
+
+    def test_comparison_reuses_validated_aggregate_rates_and_radar_normalization(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        candidates = [
+            row
+            for row in statistics["batting"]
+            if row["average"] is not None
+            and row["strike_rate"] is not None
+        ][:2]
+        self.assertEqual(len(candidates), 2)
+        player_ids = [row["player_id"] for row in candidates]
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            [("player", player_id) for player_id in player_ids],
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        by_id = {player["player_id"]: player for player in payload["players"]}
+
+        for expected in candidates:
+            actual = by_id[expected["player_id"]]["batting"]
+            self.assertEqual(actual["runs"], expected["runs"])
+            self.assertAlmostEqual(actual["average"], expected["average"])
+            self.assertAlmostEqual(actual["strike_rate"], expected["strike_rate"])
+
+        batting_axes = by_id[player_ids[0]]["radar"]["batting"]["axes"]
+        self.assertEqual(
+            [axis["label"] for axis in batting_axes],
+            [
+                "Runs",
+                "Batting Average",
+                "Strike Rate",
+                "Fours",
+                "Sixes",
+                "Dot-ball %",
+            ],
+        )
+        runs_axis = batting_axes[0]
+        self.assertEqual(
+            {by_id[player_id]["radar"]["batting"]["axes"][0]["normalized"] for player_id in player_ids},
+            {0, 100},
+        )
+        self.assertTrue(
+            all(axis["normalized"] is not None for axis in batting_axes)
+        )
+
+    def test_radar_normalization_respects_batting_and_bowling_metric_direction(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        batting_pair = next(
+            (
+                (left, right)
+                for index, left in enumerate(statistics["batting"])
+                for right in statistics["batting"][index + 1 :]
+                if left["dot_ball_percentage"] is not None
+                and right["dot_ball_percentage"] is not None
+                and left["dot_ball_percentage"] != right["dot_ball_percentage"]
+            )
+        )
+        batting_response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            [("player", row["player_id"]) for row in batting_pair],
+        )
+        batting_players = {
+            player["player_id"]: player
+            for player in batting_response.json()["players"]
+        }
+        lower_dots = min(batting_pair, key=lambda row: row["dot_ball_percentage"])
+        higher_dots = max(batting_pair, key=lambda row: row["dot_ball_percentage"])
+        self.assertGreater(
+            batting_players[lower_dots["player_id"]]["radar"]["batting"]["axes"][5][
+                "normalized"
+            ],
+            batting_players[higher_dots["player_id"]]["radar"]["batting"]["axes"][5][
+                "normalized"
+            ],
+        )
+
+        bowling_pair = next(
+            (
+                (left, right)
+                for index, left in enumerate(statistics["bowling"])
+                for right in statistics["bowling"][index + 1 :]
+                if left["average"] is not None
+                and right["average"] is not None
+                and left["average"] != right["average"]
+            )
+        )
+        bowling_response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            [("player", row["player_id"]) for row in bowling_pair],
+        )
+        bowling_players = {
+            player["player_id"]: player
+            for player in bowling_response.json()["players"]
+        }
+        lower_average = min(bowling_pair, key=lambda row: row["average"])
+        higher_average = max(bowling_pair, key=lambda row: row["average"])
+        self.assertGreater(
+            bowling_players[lower_average["player_id"]]["radar"]["bowling"]["axes"][1][
+                "normalized"
+            ],
+            bowling_players[higher_average["player_id"]]["radar"]["bowling"]["axes"][1][
+                "normalized"
+            ],
+        )
+
+    def test_comparison_filters_apply_and_recalculate_selected_scope(self):
+        tournament = get_tournaments()[0]
+        scoped_stats = get_player_statistics(
+            tournament_name=tournament["tournament_name"],
+            season=tournament["season"],
+            minimum_matches=0,
+        )
+        player_id = scoped_stats["batting"][0]["player_id"]
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {
+                "player": player_id,
+                "tournament": tournament["tournament_name"],
+                "season": tournament["season"],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        player = payload["players"][0]
+        self.assertEqual(payload["filters"]["selected_tournament"], tournament["tournament_name"])
+        self.assertEqual(payload["filters"]["selected_season"], tournament["season"])
+        profile = get_player_profile(player_id)
+        profile_season = next(
+            row
+            for row in profile["season_stats"]
+            if row["tournament_id"] == tournament["tournament_id"]
+        )
+        self.assertEqual(player["batting"]["runs"], profile_season["total_runs"])
+        self.assertAlmostEqual(
+            player["batting"]["average"],
+            profile_season["batting_average"],
+            places=2,
+        )
+
+    def test_comparison_team_filter_applies_to_every_selected_player(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        player = statistics["batting"][0]
+        team_name = player["teams"][0]["team_name"]
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {"player": player["player_id"], "team": team_name},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["filters"]["selected_team"], team_name)
+        self.assertIsNotNone(payload["players"][0]["batting"])
+
+    def test_empty_and_missing_statistics_are_graceful(self):
+        client = Client()
+        empty_response = client.get(reverse("cricket_nepal:player_comparison_data"))
+        self.assertEqual(empty_response.status_code, 200)
+        self.assertEqual(empty_response.json()["players"], [])
+
+        statistics = get_player_statistics(minimum_matches=0)
+        selected = statistics["batting"][0]
+        other_team = next(
+            team
+            for team in statistics["team_options"]
+            if team not in {entry["team_name"] for entry in selected["teams"]}
+        )
+        missing_response = client.get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {"player": selected["player_id"], "team": other_team},
+        )
+        self.assertEqual(missing_response.status_code, 200)
+        missing_player = missing_response.json()["players"][0]
+        self.assertIsNone(missing_player["batting"])
+        self.assertIsNone(missing_player["bowling"])
+        self.assertFalse(missing_player["radar"]["batting"]["available"])
+        self.assertFalse(missing_player["radar"]["bowling"]["available"])
+
+    def test_batting_only_and_bowling_only_players_have_partial_comparisons(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        batting_ids = {row["player_id"] for row in statistics["batting"]}
+        bowling_ids = {row["player_id"] for row in statistics["bowling"]}
+        batting_only = next(iter(batting_ids - bowling_ids))
+        bowling_only = next(iter(bowling_ids - batting_ids))
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            [("player", batting_only), ("player", bowling_only)],
+        )
+        self.assertEqual(response.status_code, 200)
+        players = {
+            player["player_id"]: player for player in response.json()["players"]
+        }
+        self.assertIsNotNone(players[batting_only]["batting"])
+        self.assertIsNone(players[batting_only]["bowling"])
+        self.assertFalse(players[batting_only]["radar"]["bowling"]["available"])
+        self.assertIsNone(players[bowling_only]["batting"])
+        self.assertIsNotNone(players[bowling_only]["bowling"])
+        self.assertFalse(players[bowling_only]["radar"]["batting"]["available"])
+
+    def test_invalid_comparison_player_ids_are_rejected(self):
+        client = Client()
+        malformed = client.get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {"player": "not-an-id"},
+        )
+        self.assertEqual(malformed.status_code, 400)
+        unknown = client.get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {"player": 999999999},
+        )
+        self.assertEqual(unknown.status_code, 404)
+
+    def test_player_comparison_is_a_top_level_navigation_item(self):
+        response = Client().get(reverse("cricket_nepal:player_comparison"))
+        rendered = response.content.decode()
+        self.assertIn(reverse("cricket_nepal:player_comparison"), rendered)

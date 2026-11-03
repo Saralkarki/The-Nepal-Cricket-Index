@@ -2134,13 +2134,17 @@ class PlayerComparisonPageTests(TestCase):
         )
         self.assertTrue(all(player["profile_url"] for player in payload["players"]))
 
-    def test_comparison_reuses_validated_aggregate_rates_and_radar_normalization(self):
+    def test_comparison_uses_validated_rates_and_full_cohort_radar_normalization(self):
         statistics = get_player_statistics(minimum_matches=0)
+        run_values = [row["runs"] for row in statistics["batting"]]
+        minimum_runs = min(run_values)
+        maximum_runs = max(run_values)
         candidates = [
             row
             for row in statistics["batting"]
             if row["average"] is not None
             and row["strike_rate"] is not None
+            and minimum_runs < row["runs"] < maximum_runs
         ][:2]
         self.assertEqual(len(candidates), 2)
         player_ids = [row["player_id"] for row in candidates]
@@ -2151,6 +2155,12 @@ class PlayerComparisonPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         by_id = {player["player_id"]: player for player in payload["players"]}
+        single_player_response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {"player": player_ids[0]},
+        )
+        self.assertEqual(single_player_response.status_code, 200)
+        single_player = single_player_response.json()["players"][0]
 
         for expected in candidates:
             actual = by_id[expected["player_id"]]["batting"]
@@ -2171,13 +2181,97 @@ class PlayerComparisonPageTests(TestCase):
             ],
         )
         runs_axis = batting_axes[0]
-        self.assertEqual(
-            {by_id[player_id]["radar"]["batting"]["axes"][0]["normalized"] for player_id in player_ids},
-            {0, 100},
+        expected_normalized_runs = (
+            (candidates[0]["runs"] - minimum_runs)
+            * 100
+            / (maximum_runs - minimum_runs)
+        )
+        self.assertAlmostEqual(runs_axis["normalized"], expected_normalized_runs)
+        self.assertAlmostEqual(
+            single_player["radar"]["batting"]["axes"][0]["normalized"],
+            expected_normalized_runs,
         )
         self.assertTrue(
             all(axis["normalized"] is not None for axis in batting_axes)
         )
+
+    def test_comparison_radar_uses_the_current_filter_cohort(self):
+        tournament = get_tournaments()[0]
+        statistics = get_player_statistics(
+            tournament_name=tournament["tournament_name"],
+            season=tournament["season"],
+            minimum_matches=0,
+        )
+        run_values = [row["runs"] for row in statistics["batting"]]
+        minimum_runs = min(run_values)
+        maximum_runs = max(run_values)
+        batting_candidate = next(
+            row
+            for row in statistics["batting"]
+            if minimum_runs < row["runs"] < maximum_runs
+        )
+        wicket_values = [row["wickets"] for row in statistics["bowling"]]
+        minimum_wickets = min(wicket_values)
+        maximum_wickets = max(wicket_values)
+        bowling_candidate = next(
+            row
+            for row in statistics["bowling"]
+            if minimum_wickets < row["wickets"] < maximum_wickets
+        )
+        player_ids = list(
+            dict.fromkeys(
+                (batting_candidate["player_id"], bowling_candidate["player_id"])
+            )
+        )
+        filters = {
+            "tournament": tournament["tournament_name"],
+            "season": tournament["season"],
+        }
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            [("player", player_id) for player_id in player_ids]
+            + list(filters.items()),
+        )
+        self.assertEqual(response.status_code, 200)
+        players_by_id = {
+            player["player_id"]: player for player in response.json()["players"]
+        }
+        expected_normalized_runs = (
+            (batting_candidate["runs"] - minimum_runs)
+            * 100
+            / (maximum_runs - minimum_runs)
+        )
+        expected_normalized_wickets = (
+            (bowling_candidate["wickets"] - minimum_wickets)
+            * 100
+            / (maximum_wickets - minimum_wickets)
+        )
+        self.assertAlmostEqual(
+            players_by_id[batting_candidate["player_id"]]["radar"]["batting"]["axes"][
+                0
+            ]["normalized"],
+            expected_normalized_runs,
+        )
+        self.assertAlmostEqual(
+            players_by_id[bowling_candidate["player_id"]]["radar"]["bowling"]["axes"][
+                0
+            ]["normalized"],
+            expected_normalized_wickets,
+        )
+        for candidate, kind, axis_index, expected in (
+            (batting_candidate, "batting", 0, expected_normalized_runs),
+            (bowling_candidate, "bowling", 0, expected_normalized_wickets),
+        ):
+            single_response = Client().get(
+                reverse("cricket_nepal:player_comparison_data"),
+                {"player": candidate["player_id"], **filters},
+            )
+            self.assertEqual(single_response.status_code, 200)
+            single_player = single_response.json()["players"][0]
+            self.assertAlmostEqual(
+                single_player["radar"][kind]["axes"][axis_index]["normalized"],
+                expected,
+            )
 
     def test_radar_normalization_respects_batting_and_bowling_metric_direction(self):
         statistics = get_player_statistics(minimum_matches=0)

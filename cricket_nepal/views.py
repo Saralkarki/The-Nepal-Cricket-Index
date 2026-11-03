@@ -298,7 +298,7 @@ def player_comparison_data(request):
         season=request.GET.get("season", "").strip()[:30],
         team_name=request.GET.get("team", "").strip()[:100],
         minimum_matches=0,
-        player_ids=player_ids,
+        player_ids=None if player_ids else (),
         include_best_performances=False,
     )
     batting_rows = {row["player_id"]: row for row in statistics["batting"]}

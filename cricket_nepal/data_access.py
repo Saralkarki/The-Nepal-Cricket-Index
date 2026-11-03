@@ -1688,6 +1688,7 @@ def _player_statistics_scope(
     team_names: tuple[str, ...],
     minimum_matches: int,
     search_term: str,
+    player_ids: tuple[int, ...] | None = None,
 ) -> tuple[str, list[Any]]:
     team_filter = ""
     params: list[Any] = [
@@ -1701,6 +1702,14 @@ def _player_statistics_scope(
         team_filter = f"AND mp.team_name IN ({placeholders})"
         params.extend(team_names)
     params.extend((minimum_matches, search_term))
+    player_filter = ""
+    if player_ids is not None:
+        if player_ids:
+            placeholders = ", ".join(["%s"] * len(player_ids))
+            player_filter = f"AND p.player_id IN ({placeholders})"
+            params.extend(player_ids)
+        else:
+            player_filter = "AND 1 = 0"
 
     return (
         f"""
@@ -1755,6 +1764,7 @@ def _player_statistics_scope(
             JOIN players AS p ON p.player_id = counts.player_id
             WHERE counts.matches_played >= %s
               AND instr(lower(p.player_name), lower(%s)) > 0
+              {player_filter}
         )
         """,
         params,
@@ -1792,6 +1802,8 @@ def get_player_statistics(
     minimum_matches: int = 1,
     batting_sort: str = "runs",
     bowling_sort: str = "wickets",
+    player_ids: tuple[int, ...] | None = None,
+    include_best_performances: bool = True,
 ) -> dict[str, Any]:
     minimum_matches = max(0, minimum_matches)
     tournaments = get_tournaments()
@@ -1876,6 +1888,7 @@ def get_player_statistics(
         team_filter_names,
         minimum_matches,
         search_term,
+        player_ids,
     )
     batting_qualification = {
         "average": "average_qualified",
@@ -2022,11 +2035,15 @@ def get_player_statistics(
         )
         metadata_rows = _rows_as_dicts(cursor)
 
-        performances = _get_player_best_performances(
-            cursor,
-            common_ctes,
-            common_params,
-            season,
+        performances = (
+            _get_player_best_performances(
+                cursor,
+                common_ctes,
+                common_params,
+                season,
+            )
+            if include_best_performances
+            else {}
         )
 
     metadata: dict[int, dict[str, set[Any]]] = {}
@@ -2340,6 +2357,42 @@ def get_player_directory(search_term: str = "") -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def search_players(search_term: str, limit: int = 20) -> list[dict[str, Any]]:
+    search_term = search_term.strip()
+    if len(search_term) < 2:
+        return []
+
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT player_id, player_name
+            FROM players
+            WHERE instr(lower(player_name), lower(%s)) > 0
+            ORDER BY lower(player_name), player_id
+            LIMIT %s
+            """,
+            [search_term, max(1, limit)],
+        )
+        return _rows_as_dicts(cursor)
+
+
+def get_player_names(player_ids: tuple[int, ...]) -> dict[int, str]:
+    if not player_ids:
+        return {}
+
+    placeholders = ", ".join(["%s"] * len(player_ids))
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT player_id, player_name
+            FROM players
+            WHERE player_id IN ({placeholders})
+            """,
+            list(player_ids),
+        )
+        return {row["player_id"]: row["player_name"] for row in _rows_as_dicts(cursor)}
 
 
 def _sum_metric(rows: list[dict[str, Any]], column: str) -> int | float | None:

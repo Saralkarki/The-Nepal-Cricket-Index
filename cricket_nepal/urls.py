@@ -32,9 +32,19 @@ urlpatterns = [
     ),
     path(
         "player-statistics/compare/",
-        views.player_statistics,
-        {"statistics_view": "compare"},
+        views.player_statistics_compare,
         name="player_statistics_compare",
+    ),
+    path("player-comparison/", views.player_comparison, name="player_comparison"),
+    path(
+        "player-comparison/data/",
+        views.player_comparison_data,
+        name="player_comparison_data",
+    ),
+    path(
+        "player-comparison/search/",
+        views.player_comparison_search,
+        name="player_comparison_search",
     ),
     path("players/<int:player_id>/", views.player_profile, name="player_profile"),
 ]

@@ -10,6 +10,7 @@ from django.urls import reverse
 
 from cricket_nepal.data_access import (
     _build_npl_team_directory,
+    list_tables,
     get_player_profile,
     get_player_statistics,
     get_tournaments,
@@ -161,7 +162,7 @@ class HomepageTests(SimpleTestCase):
         self.assertContains(response, "Nepal Cricket Dataset")
         self.assertContains(response, "Tournaments")
         self.assertContains(response, "Players")
-        self.assertContains(response, "Matches")
+        self.assertContains(response, "NPL matches")
         self.assertContains(response, "Nepal Premier League")
         self.assertNotContains(response, "Total runs")
         self.assertNotContains(response, "Leading run scorer")
@@ -355,6 +356,33 @@ class HomepageTests(SimpleTestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class AboutPageTests(SimpleTestCase):
+    def test_about_page_explains_dataset_pipeline_and_source_limitations(self):
+        response = self.client.get(reverse("cricket_nepal:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Prepared Parquet exports")
+        self.assertContains(response, "Cricsheet player identifiers")
+        self.assertContains(response, "licensing details are still being confirmed")
+        self.assertContains(response, "Howzat Analytics")
+
+    def test_about_page_describes_consulting_work_and_links_to_company(self):
+        response = self.client.get(reverse("cricket_nepal:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data analysis and consulting practice")
+        self.assertContains(response, "data visualization")
+        self.assertContains(response, "research and automation")
+        self.assertContains(response, 'href="https://howzatanalytics.com/"')
+        self.assertContains(response, 'rel="noopener noreferrer"')
+
+    def test_about_page_is_available_from_primary_navigation(self):
+        response = self.client.get(reverse("cricket_nepal:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, ">About</a>")
+
+
 class NplPointsTableTests(SimpleTestCase):
     def test_points_use_only_round_robin_and_count_all_out_as_full_overs(self):
         matches = [
@@ -425,6 +453,14 @@ class MatchesPageTests(SimpleTestCase):
         "player_of_match": "BKEL Milantha",
     }
 
+    def test_npl_match_listing_has_specific_route_and_generic_listing_is_unrouted(self):
+        self.assertEqual(reverse("cricket_nepal:npl_matches"), "/npl-matches/")
+        self.assertEqual(self.client.get("/matches/").status_code, 404)
+        self.assertEqual(
+            reverse("cricket_nepal:match_detail", args=["1462596"]),
+            "/matches/1462596/",
+        )
+
     def test_match_list_renders_data_and_links_to_detail(self):
         with (
             patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
@@ -432,7 +468,7 @@ class MatchesPageTests(SimpleTestCase):
             patch("cricket_nepal.views.get_matches", return_value=[self.sample_match]),
         ):
             response = self.client.get(
-                reverse("cricket_nepal:matches"), {"tournament_id": "1783"}
+                reverse("cricket_nepal:npl_matches"), {"tournament_id": "1783"}
             )
 
         self.assertEqual(response.status_code, 200)
@@ -440,6 +476,14 @@ class MatchesPageTests(SimpleTestCase):
         self.assertContains(response, "Janakpur Bolts won")
         self.assertContains(response, "by 8 wkts")
         self.assertContains(response, "1 match</h2>")
+        self.assertContains(response, "<h1>NPL Matches</h1>", html=True)
+        primary_nav = (
+            response.content.decode()
+            .split('<nav class="primary-nav" aria-label="Main navigation">', 1)[1]
+            .split("</nav>", 1)[0]
+        )
+        self.assertNotIn(">NPL Matches</a>", primary_nav)
+        self.assertNotIn(">Matches</a>", primary_nav)
         self.assertContains(
             response,
             reverse("cricket_nepal:match_detail", args=["1462596"]),
@@ -454,7 +498,7 @@ class MatchesPageTests(SimpleTestCase):
             ) as matches_query,
         ):
             response = self.client.get(
-                reverse("cricket_nepal:matches"),
+                reverse("cricket_nepal:npl_matches"),
                 {"tournament_id": "1783", "team": "Janakpur Bolts"},
             )
 
@@ -480,7 +524,7 @@ class MatchesPageTests(SimpleTestCase):
                 return_value=[match_without_result],
             ),
         ):
-            response = self.client.get(reverse("cricket_nepal:matches"))
+            response = self.client.get(reverse("cricket_nepal:npl_matches"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Result unavailable")
@@ -637,6 +681,46 @@ class MatchesPageTests(SimpleTestCase):
 
 
 class PlayerDirectoryTests(SimpleTestCase):
+    def test_npl_directory_uses_specific_route_and_generic_players_path_is_unrouted(self):
+        self.assertEqual(reverse("cricket_nepal:players"), "/npl-players/")
+        self.assertEqual(
+            self.client.get("/players/").status_code,
+            404,
+        )
+        self.assertEqual(
+            reverse("cricket_nepal:player_profile", args=[25]),
+            "/players/25/",
+        )
+
+    def test_header_players_menu_links_to_npl_and_national_team_pages(self):
+        with patch("cricket_nepal.views.get_player_directory", return_value=[]):
+            response = self.client.get(reverse("cricket_nepal:players"))
+
+        self.assertEqual(response.status_code, 200)
+        rendered = response.content.decode()
+        primary_nav = (
+            rendered.split('<nav class="primary-nav" aria-label="Main navigation">', 1)[1]
+            .split("</nav>", 1)[0]
+        )
+        self.assertIn(">Players</a>", primary_nav)
+        self.assertIn(">NPL Players</a>", primary_nav)
+        self.assertIn(">Nepal National Team</a>", primary_nav)
+        self.assertIn(reverse("cricket_nepal:players"), primary_nav)
+        self.assertIn(reverse("cricket_nepal:national_team_players"), primary_nav)
+        self.assertEqual(
+            reverse("cricket_nepal:national_team_players"),
+            "/nepal-national-team/",
+        )
+
+    def test_national_team_page_is_a_placeholder_without_invented_players(self):
+        response = self.client.get(reverse("cricket_nepal:national_team_players"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nepal National Team")
+        self.assertContains(response, "No Nepal national team player data is available yet.")
+        self.assertNotContains(response, "Player profiles")
+        self.assertContains(response, reverse("cricket_nepal:players"))
+
     def test_directory_lists_participation_and_links_to_profiles(self):
         players = [
             {
@@ -2022,6 +2106,7 @@ class PlayerStatisticsPageTests(TestCase):
         self.assertEqual(batting_response.status_code, 200)
         self.assertIn("Batting statistics", batting_html)
         self.assertNotIn("Bowling statistics", batting_html)
+        self.assertNotIn("Not qualified", batting_html)
 
         bowling_response = client.get(
             reverse("cricket_nepal:player_statistics_bowling")
@@ -2030,6 +2115,7 @@ class PlayerStatisticsPageTests(TestCase):
         self.assertEqual(bowling_response.status_code, 200)
         self.assertIn("Bowling statistics", bowling_html)
         self.assertNotIn("Batting statistics", bowling_html)
+        self.assertNotIn("Not qualified", bowling_html)
 
         compare_response = client.get(
             reverse("cricket_nepal:player_statistics_compare")
@@ -2040,6 +2126,108 @@ class PlayerStatisticsPageTests(TestCase):
             reverse("cricket_nepal:player_comparison"),
         )
 
+    def test_fielding_page_has_active_submenu_and_data_unavailable_state(self):
+        response = Client().get(reverse("cricket_nepal:player_statistics_fielding"))
+
+        self.assertEqual(response.status_code, 200)
+        rendered = response.content.decode()
+        nav = rendered.split(
+            '<div class="nav-dropdown-menu">', 2
+        )[2].split("</div>", 1)[0]
+        self.assertIn(
+            f'href="{reverse("cricket_nepal:player_statistics_fielding")}" aria-current="page">Fielding</a>',
+            nav,
+        )
+        self.assertNotIn(
+            f'href="{reverse("cricket_nepal:player_statistics_batting")}" aria-current="page"',
+            nav,
+        )
+        self.assertNotIn(
+            f'href="{reverse("cricket_nepal:player_statistics_bowling")}" aria-current="page"',
+            nav,
+        )
+        self.assertNotIn("<details", rendered)
+        self.assertIn('<div class="nav-dropdown">', rendered)
+        for heading in (
+            "Rank",
+            "Player",
+            "Team",
+            "Tournament",
+            "Season",
+            "Matches",
+            "Catches",
+            "Stumpings",
+            "Run-outs",
+            "Total dismissals",
+            "Dismissals per match",
+        ):
+            self.assertIn(heading, rendered)
+        self.assertIn("Fielding records are not available", rendered)
+        self.assertIn("No statistics are inferred", rendered)
+        self.assertNotIn("fielding_stats_by_match", list_tables())
+
+    def test_fielding_page_uses_dynamic_filters_and_preserves_filter_state(self):
+        tournament = get_tournaments()[0]
+        metadata = get_player_statistics(
+            tournament_name=tournament["tournament_name"],
+            season=tournament["season"],
+            minimum_matches=0,
+            player_ids=(),
+            include_best_performances=False,
+        )
+        self.assertTrue(metadata["team_options"])
+        team = metadata["team_options"][0]
+        response = Client().get(
+            reverse("cricket_nepal:player_statistics_fielding"),
+            {
+                "tournament": tournament["tournament_name"],
+                "season": tournament["season"],
+                "team": team,
+                "q": "K",
+                "minimum_matches": "3",
+                "fielding_sort": "catches",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        statistics = response.context["statistics"]
+        self.assertEqual(statistics["selected_tournament"], tournament["tournament_name"])
+        self.assertEqual(statistics["selected_season"], tournament["season"])
+        self.assertEqual(statistics["selected_team"], team)
+        self.assertEqual(statistics["search_term"], "K")
+        self.assertEqual(statistics["minimum_matches"], 3)
+        self.assertEqual(
+            statistics["tournament_options"],
+            metadata["tournament_options"],
+        )
+        self.assertEqual(
+            statistics["season_options"],
+            metadata["season_options"],
+        )
+        self.assertEqual(
+            statistics["team_options"],
+            metadata["team_options"],
+        )
+        self.assertEqual(response.context["fielding_sort"], "catches")
+        rendered = response.content.decode()
+        self.assertIn(f'<option value="{team}" selected>', rendered)
+        self.assertIn('<option value="catches" selected>', rendered)
+
+    def test_fielding_filter_values_are_bounded_and_sort_is_validated(self):
+        response = Client().get(
+            reverse("cricket_nepal:player_statistics_fielding"),
+            {
+                "minimum_matches": "99",
+                "q": "x" * 150,
+                "fielding_sort": "unknown",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["statistics"]["minimum_matches"], 20)
+        self.assertEqual(len(response.context["statistics"]["search_term"]), 100)
+        self.assertEqual(response.context["fielding_sort"], "dismissals")
+
     def test_player_statistics_header_has_three_separate_pages(self):
         response = Client().get(reverse("cricket_nepal:player_statistics"))
         rendered = response.content.decode()
@@ -2047,6 +2235,7 @@ class PlayerStatisticsPageTests(TestCase):
         for page_name in (
             "player_statistics_batting",
             "player_statistics_bowling",
+            "player_statistics_fielding",
         ):
             self.assertIn(reverse(f"cricket_nepal:{page_name}"), rendered)
         self.assertIn(reverse("cricket_nepal:player_comparison"), rendered)

@@ -37,7 +37,8 @@ a {
 
 a:focus-visible,
 button:focus-visible,
-select:focus-visible {
+select:focus-visible,
+summary:focus-visible {
     outline: 3px solid var(--green);
     outline-offset: 3px;
 }
@@ -153,8 +154,14 @@ select:focus-visible {
 }
 
 .primary-nav .nav-dropdown-menu a:hover,
-.primary-nav .nav-dropdown-menu a:focus-visible {
+.primary-nav .nav-dropdown-menu a:focus-visible,
+.primary-nav .nav-dropdown-menu a[aria-current="page"] {
     background: #f0f1eb;
+}
+
+.primary-nav .nav-dropdown-menu a[aria-current="page"] {
+    color: var(--navy);
+    font-weight: 750;
 }
 
 .primary-nav a {
@@ -1489,6 +1496,40 @@ select:focus-visible {
     margin-top: 12px;
 }
 
+.about-page {
+    padding-bottom: 56px;
+}
+
+.about-section {
+    max-width: 820px;
+    margin: 0 0 22px;
+    padding: 24px 28px;
+    border: 1px solid var(--line);
+    background: var(--white);
+}
+
+.about-section h2 {
+    margin: 0 0 12px;
+    color: var(--navy);
+    font-size: clamp(22px, 3.2vw, 30px);
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+}
+
+.about-section p:not(.eyebrow) {
+    max-width: 720px;
+    color: var(--ink-soft);
+}
+
+.about-section p:last-of-type {
+    margin-bottom: 0;
+}
+
+.about-section .text-link {
+    display: inline-block;
+    margin-top: 18px;
+}
+
 .player-statistics-view-placeholder {
     max-width: 760px;
     margin: 38px auto;
@@ -1620,12 +1661,6 @@ select:focus-visible {
 
 .player-statistics-table a:hover {
     text-decoration: underline;
-}
-
-.player-statistics-unqualified {
-    display: block;
-    color: var(--ink-soft);
-    font-size: 8px;
 }
 
 .player-statistics-empty {
@@ -2924,19 +2959,31 @@ select:focus-visible {
 
     .primary-nav {
         width: 100%;
-        justify-content: space-between;
+        flex-wrap: wrap;
+        justify-content: flex-start;
         gap: 10px;
-        overflow-x: auto;
+        overflow: visible;
         padding-bottom: 3px;
     }
 
-    .primary-nav a {
+    .primary-nav > a,
+    .primary-nav > .nav-dropdown {
         flex: 0 0 auto;
+    }
+
+    .primary-nav a {
         font-size: 11px;
     }
 
     .nav-dropdown-menu {
-        left: 0;
+        position: static;
+        display: grid;
+        min-width: 0;
+        gap: 1px;
+        padding: 2px 0 0 7px;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
     }
 
     .hero-inner {

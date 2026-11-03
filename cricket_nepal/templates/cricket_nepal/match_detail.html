@@ -4,8 +4,8 @@
 
 {% block content %}
 <section class="page-section match-detail-page">
-    <a class="match-back-link" href="{% url 'cricket_nepal:matches' %}?tournament_id={{ match.tournament_id }}">
-        <span aria-hidden="true">←</span> Back to {{ match.season }} matches
+    <a class="match-back-link" href="{% url 'cricket_nepal:npl_matches' %}?tournament_id={{ match.tournament_id }}">
+        <span aria-hidden="true">←</span> Back to {{ match.season }} NPL matches
     </a>
 
     <div class="match-detail-heading">

@@ -1,19 +1,19 @@
 {% extends "cricket_nepal/base.html" %}
 
-{% block title %}Matches · Nepal Cricket Dashboard{% endblock %}
+{% block title %}NPL Matches · Nepal Cricket Dashboard{% endblock %}
 
 {% block content %}
 <section class="page-section matches-page">
     <div class="matches-heading">
         <p class="eyebrow section-eyebrow">Nepal Premier League · Match archive</p>
-        <h1>Matches</h1>
+        <h1>NPL Matches</h1>
         <p class="section-intro">
             Results and match details for {{ selected_tournament.tournament_name }}
             {{ selected_tournament.season }}.
         </p>
     </div>
 
-    <form class="match-filters" method="get" action="{% url 'cricket_nepal:matches' %}">
+    <form class="match-filters" method="get" action="{% url 'cricket_nepal:npl_matches' %}">
         <div class="filter-field">
             <label for="tournament_id">Tournament</label>
             <select id="tournament_id" name="tournament_id">

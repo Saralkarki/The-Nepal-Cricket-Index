@@ -26,9 +26,9 @@
 
     <nav class="tournament-shortcuts" aria-label="Nepal Premier League sections">
         {% if selected_season %}
-        <a href="{% url 'cricket_nepal:matches' %}?tournament_id={{ selected_season.tournament_id }}">NPL matches <span aria-hidden="true">→</span></a>
+        <a href="{% url 'cricket_nepal:npl_matches' %}?tournament_id={{ selected_season.tournament_id }}">NPL matches <span aria-hidden="true">→</span></a>
         {% else %}
-        <a href="{% url 'cricket_nepal:matches' %}">NPL matches <span aria-hidden="true">→</span></a>
+        <a href="{% url 'cricket_nepal:npl_matches' %}">NPL matches <span aria-hidden="true">→</span></a>
         {% endif %}
         {% if selected_season %}
         <a href="{% url 'cricket_nepal:teams' %}?season_id={{ selected_season.tournament_id }}">NPL teams <span aria-hidden="true">→</span></a>

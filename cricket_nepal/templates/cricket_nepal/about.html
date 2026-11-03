@@ -1,0 +1,57 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}About · Nepal Cricket Dataset{% endblock %}
+
+{% block content %}
+<section class="page-section about-page">
+    <header class="player-statistics-header">
+        <p class="eyebrow section-eyebrow">About this project</p>
+        <h1>Nepal Cricket Dataset</h1>
+        <p class="section-intro">
+            An independent, data-led resource for exploring Nepal cricket through match,
+            team and player records.
+        </p>
+    </header>
+
+    <section class="about-section" aria-labelledby="data-story-title">
+        <p class="eyebrow section-eyebrow">The data</p>
+        <h2 id="data-story-title">From prepared records to useful insight</h2>
+        <p>
+            The current release focuses on Nepal Premier League seasons represented in the
+            dataset. Prepared Parquet exports are imported into a read-only analytical
+            database, where match, innings, team and player records power the pages and
+            statistics in this dashboard.
+        </p>
+        <p>
+            Player records include Cricsheet player identifiers for identity matching.
+            Source-level attribution and licensing details are still being confirmed, so
+            the dashboard does not claim that every record is a direct official feed or
+            that the dataset is complete. Data coverage will be made clearer as provenance
+            is verified and additional competitions are added.
+        </p>
+    </section>
+
+    <section class="about-section" aria-labelledby="howzat-title">
+        <p class="eyebrow section-eyebrow">Built by</p>
+        <h2 id="howzat-title">Howzat Analytics</h2>
+        <p>
+            Howzat Analytics is an independent data analysis and consulting practice that
+            helps organizations turn raw data into practical insight. Its work spans data
+            analysis, data visualization, data integration, research and automation, and
+            data extraction.
+        </p>
+        <p>
+            The practice combines technical delivery with clear communication—building
+            dependable data workflows and presenting findings in ways that support
+            informed decisions. This cricket dataset brings that approach to the game:
+            structured data, transparent calculations, and accessible analysis.
+        </p>
+        <a
+            class="text-link"
+            href="https://howzatanalytics.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+        >Explore Howzat Analytics <span aria-hidden="true">→</span></a>
+    </section>
+</section>
+{% endblock %}

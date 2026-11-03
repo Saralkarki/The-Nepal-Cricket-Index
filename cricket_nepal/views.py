@@ -38,6 +38,14 @@ BOWLER_RADAR_AXES = (
     ("Dot-ball %", "dot_ball_percentage", False, "%"),
 )
 
+FIELDING_SORT_OPTIONS = (
+    ("dismissals", "Most dismissals"),
+    ("catches", "Most catches"),
+    ("stumpings", "Most stumpings"),
+    ("run_outs", "Most run-outs"),
+    ("dismissals_per_match", "Highest dismissals per match"),
+)
+
 COMPARISON_BATTING_RADAR_AXES = (
     ("Runs", "runs", True, ""),
     ("Batting Average", "average", True, ""),
@@ -120,6 +128,10 @@ def home(request):
         "cricket_nepal/home.html",
         {"tournaments": _tournament_directory()},
     )
+
+
+def about(request):
+    return render(request, "cricket_nepal/about.html")
 
 
 def _tournament_directory():
@@ -211,6 +223,10 @@ def players(request):
     )
 
 
+def national_team_players(request):
+    return render(request, "cricket_nepal/national_team_players.html")
+
+
 def player_statistics(request, statistics_view="batting"):
     try:
         minimum_matches = int(request.GET.get("minimum_matches", "1"))
@@ -237,6 +253,42 @@ def player_statistics(request, statistics_view="batting"):
                 "bowling": "cricket_nepal:player_statistics_bowling",
                 "compare": "cricket_nepal:player_statistics_compare",
             }[statistics_view],
+        },
+    )
+
+
+def player_fielding_statistics(request):
+    try:
+        minimum_matches = int(request.GET.get("minimum_matches", "1"))
+    except ValueError:
+        minimum_matches = 1
+    minimum_matches = min(max(minimum_matches, 0), 20)
+
+    fielding_sort = request.GET.get("fielding_sort", "dismissals")
+    valid_sort_values = {value for value, _ in FIELDING_SORT_OPTIONS}
+    if fielding_sort not in valid_sort_values:
+        fielding_sort = "dismissals"
+
+    statistics = get_player_statistics(
+        tournament_name=request.GET.get("tournament", "").strip()[:100],
+        season=request.GET.get("season", "").strip()[:30],
+        team_name=request.GET.get("team", "").strip()[:100],
+        search_term=request.GET.get("q", "").strip()[:100],
+        minimum_matches=minimum_matches,
+        player_ids=(),
+        include_best_performances=False,
+    )
+    return render(
+        request,
+        "cricket_nepal/fielding_statistics.html",
+        {
+            "statistics": statistics,
+            "statistics_view": "fielding",
+            "fielding_sort": fielding_sort,
+            "fielding_sort_options": [
+                {"value": value, "label": label}
+                for value, label in FIELDING_SORT_OPTIONS
+            ],
         },
     )
 

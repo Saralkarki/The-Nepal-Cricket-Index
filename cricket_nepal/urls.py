@@ -6,17 +6,23 @@ app_name = "cricket_nepal"
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("about/", views.about, name="about"),
     path("tournaments/", views.tournaments, name="tournaments"),
     path(
         "tournaments/<slug:tournament_slug>/",
         views.tournament_overview,
         name="tournament_overview",
     ),
-    path("matches/", views.matches, name="matches"),
+    path("npl-matches/", views.matches, name="npl_matches"),
     path("matches/<str:match_id>/", views.match_detail, name="match_detail"),
     path("teams/", views.teams, name="teams"),
     path("teams/<slug:team_slug>/", views.team_profile, name="team_profile"),
-    path("players/", views.players, name="players"),
+    path("npl-players/", views.players, name="players"),
+    path(
+        "nepal-national-team/",
+        views.national_team_players,
+        name="national_team_players",
+    ),
     path("player-statistics/", views.player_statistics, name="player_statistics"),
     path(
         "player-statistics/batting/",
@@ -29,6 +35,11 @@ urlpatterns = [
         views.player_statistics,
         {"statistics_view": "bowling"},
         name="player_statistics_bowling",
+    ),
+    path(
+        "player-statistics/fielding/",
+        views.player_fielding_statistics,
+        name="player_statistics_fielding",
     ),
     path(
         "player-statistics/compare/",

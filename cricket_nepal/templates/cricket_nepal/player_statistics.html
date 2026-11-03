@@ -1,13 +1,21 @@
 {% extends "cricket_nepal/base.html" %}
 
-{% block title %}Player Statistics · Nepal Cricket Dataset{% endblock %}
+{% block title %}{% if statistics_view == "bowling" %}Bowling Statistics{% else %}Batting Statistics{% endif %} · Nepal Cricket Dataset{% endblock %}
 
 {% block content %}
 <section class="page-section player-statistics-page">
     <header class="player-statistics-header">
-        <p class="eyebrow section-eyebrow">Dataset-wide comparison</p>
-        <h1>Player Statistics</h1>
-        <p class="section-intro">Compare batting and bowling performances across the competitions and seasons in the Nepal Cricket Dataset.</p>
+        <p class="eyebrow section-eyebrow">
+            {% if statistics_view == "bowling" %}Bowling Statistics{% else %}Batting Statistics{% endif %}
+        </p>
+        <h1>{% if statistics_view == "bowling" %}Bowling Statistics{% else %}Batting Statistics{% endif %}</h1>
+        <p class="section-intro">
+            {% if statistics_view == "bowling" %}
+            Compare bowling performances across the competitions and seasons in the Nepal Cricket Dataset.
+            {% else %}
+            Compare batting performances across the competitions and seasons in the Nepal Cricket Dataset.
+            {% endif %}
+        </p>
     </header>
 
     <form class="player-statistics-filters" method="get" aria-label="Filter player statistics">
@@ -113,10 +121,10 @@
                         <td>{% for tournament in row.tournaments %}{% if tournament.has_overview %}<a href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">{{ tournament.tournament_name }}</a>{% else %}{{ tournament.tournament_name }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
                         <td>{{ row.seasons|join:", "|default:"—" }}</td>
                         <td>{{ row.matches }}</td><td>{{ row.innings }}</td><td>{{ row.runs }}</td>
-                        <td>{% if row.average is not None %}{{ row.average|floatformat:2 }}{% else %}—{% endif %}{% if not row.average_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
-                        <td>{% if row.strike_rate is not None %}{{ row.strike_rate|floatformat:2 }}{% else %}—{% endif %}{% if not row.strike_rate_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.average is not None %}{{ row.average|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>{% if row.strike_rate is not None %}{{ row.strike_rate|floatformat:2 }}{% else %}—{% endif %}</td>
                         <td>{{ row.balls_faced }}</td><td>{{ row.fours }}</td><td>{{ row.sixes }}</td>
-                        <td>{% if row.dot_ball_percentage is not None %}{{ row.dot_ball_percentage|floatformat:2 }}%{% else %}—{% endif %}{% if not row.dot_ball_percentage_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.dot_ball_percentage is not None %}{{ row.dot_ball_percentage|floatformat:2 }}%{% else %}—{% endif %}</td>
                         <td>{{ row.highest_score|default_if_none:"—" }}</td>
                     </tr>
                     {% empty %}
@@ -125,7 +133,7 @@
                 </tbody>
             </table>
         </div>
-        <p class="team-qualification-note">Minimum matches: {{ statistics.minimum_matches }}. Batting average is qualified at 3 dismissals; strike rate and dot-ball percentage at 60 balls faced. Rates are recalculated from combined runs, dismissals and balls.</p>
+        <p class="team-qualification-note">Rates are recalculated from combined runs, dismissals and balls.</p>
     </section>
     {% endif %}
 
@@ -157,11 +165,11 @@
                         <td>{{ row.seasons|join:", "|default:"—" }}</td>
                         <td>{{ row.matches }}</td><td>{{ row.innings }}</td><td>{{ row.overs }}</td>
                         <td>{{ row.runs_conceded }}</td><td>{{ row.wickets }}</td>
-                        <td>{% if row.average is not None %}{{ row.average|floatformat:2 }}{% else %}—{% endif %}{% if not row.average_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
-                        <td>{% if row.economy is not None %}{{ row.economy|floatformat:2 }}{% else %}—{% endif %}{% if not row.economy_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
-                        <td>{% if row.strike_rate is not None %}{{ row.strike_rate|floatformat:2 }}{% else %}—{% endif %}{% if not row.strike_rate_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.average is not None %}{{ row.average|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>{% if row.economy is not None %}{{ row.economy|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>{% if row.strike_rate is not None %}{{ row.strike_rate|floatformat:2 }}{% else %}—{% endif %}</td>
                         <td>{{ row.maidens }}</td>
-                        <td>{% if row.dot_ball_percentage is not None %}{{ row.dot_ball_percentage|floatformat:2 }}%{% else %}—{% endif %}{% if not row.dot_ball_percentage_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.dot_ball_percentage is not None %}{{ row.dot_ball_percentage|floatformat:2 }}%{% else %}—{% endif %}</td>
                         <td>{{ row.best_bowling_figures|default:"—" }}</td>
                     </tr>
                     {% empty %}
@@ -170,7 +178,7 @@
                 </tbody>
             </table>
         </div>
-        <p class="team-qualification-note">Bowling average, economy, strike rate and dot-ball percentage are qualified at 72 legal balls. A zero-wicket bowling average or strike rate is not ranked. Rates are calculated from combined runs, wickets and legal balls.</p>
+        <p class="team-qualification-note">Rates are calculated from combined runs, wickets and legal balls. A zero-wicket bowling average or strike rate is not ranked.</p>
     </section>
     {% endif %}
 

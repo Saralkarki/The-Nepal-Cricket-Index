@@ -20,16 +20,23 @@
             <nav class="primary-nav" aria-label="Main navigation">
                 <a href="{% url 'cricket_nepal:home' %}">Home</a>
                 <a href="{% url 'cricket_nepal:tournaments' %}">Tournaments</a>
-                <a href="{% url 'cricket_nepal:players' %}">Players</a>
+                <div class="nav-dropdown">
+                    <a href="{% url 'cricket_nepal:players' %}" aria-haspopup="true">Players</a>
+                    <div class="nav-dropdown-menu">
+                        <a href="{% url 'cricket_nepal:players' %}">NPL Players</a>
+                        <a href="{% url 'cricket_nepal:national_team_players' %}">Nepal National Team</a>
+                    </div>
+                </div>
                 <div class="nav-dropdown">
                     <a href="{% url 'cricket_nepal:player_statistics_batting' %}" aria-haspopup="true">Player Statistics</a>
                     <div class="nav-dropdown-menu">
-                        <a href="{% url 'cricket_nepal:player_statistics_batting' %}">Batting Stats</a>
-                        <a href="{% url 'cricket_nepal:player_statistics_bowling' %}">Bowling Stats</a>
+                        <a href="{% url 'cricket_nepal:player_statistics_batting' %}"{% if statistics_view == "batting" %} aria-current="page"{% endif %}>Batting</a>
+                        <a href="{% url 'cricket_nepal:player_statistics_bowling' %}"{% if statistics_view == "bowling" %} aria-current="page"{% endif %}>Bowling</a>
+                        <a href="{% url 'cricket_nepal:player_statistics_fielding' %}"{% if statistics_view == "fielding" %} aria-current="page"{% endif %}>Fielding</a>
                     </div>
                 </div>
                 <a href="{% url 'cricket_nepal:player_comparison' %}">Player Comparison</a>
-                <a href="{% url 'cricket_nepal:matches' %}">Matches</a>
+                <a href="{% url 'cricket_nepal:about' %}">About</a>
             </nav>
         </div>
     </header>

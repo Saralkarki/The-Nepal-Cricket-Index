@@ -1,0 +1,112 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Fielding Statistics · Nepal Cricket Dataset{% endblock %}
+
+{% block content %}
+<section class="page-section player-statistics-page fielding-statistics-page">
+    <header class="player-statistics-header">
+        <p class="eyebrow section-eyebrow">Dataset-wide comparison</p>
+        <h1>Fielding Statistics</h1>
+        <p class="section-intro">
+            Compare catches, stumpings and individual run-out involvements across
+            tournaments and seasons.
+        </p>
+    </header>
+
+    <form class="player-statistics-filters" method="get" aria-label="Filter fielding statistics">
+        <div class="player-statistics-filter-grid">
+            <label>
+                Tournament
+                <select name="tournament">
+                    <option value="">All Tournaments</option>
+                    {% for tournament in statistics.tournament_options %}
+                    <option value="{{ tournament }}"{% if statistics.selected_tournament == tournament %} selected{% endif %}>{{ tournament }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Season
+                <select name="season">
+                    <option value="">All Seasons</option>
+                    {% for season in statistics.season_options %}
+                    <option value="{{ season }}"{% if statistics.selected_season == season %} selected{% endif %}>{{ season }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Team
+                <select name="team">
+                    <option value="">All Teams</option>
+                    {% for team in statistics.team_options %}
+                    <option value="{{ team }}"{% if statistics.selected_team == team %} selected{% endif %}>{{ team }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Player search
+                <input type="search" name="q" value="{{ statistics.search_term }}" placeholder="Search player name">
+            </label>
+            <label>
+                Minimum matches
+                <select name="minimum_matches">
+                    {% for count in statistics.minimum_match_options %}
+                    <option value="{{ count }}"{% if statistics.minimum_matches == count %} selected{% endif %}>{{ count }}+</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Sort by
+                <select name="fielding_sort">
+                    {% for option in fielding_sort_options %}
+                    <option value="{{ option.value }}"{% if fielding_sort == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <div class="player-statistics-filter-actions">
+            <button type="submit">Apply filters</button>
+            <a href="{% url 'cricket_nepal:player_statistics_fielding' %}">Clear filters</a>
+        </div>
+    </form>
+
+    <section class="player-stats-section" aria-labelledby="fielding-leaderboard-title">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Fielding leaderboard</p>
+                <h2 id="fielding-leaderboard-title">Fielding statistics</h2>
+            </div>
+        </div>
+        <p class="team-qualification-note">
+            Catches include caught and caught-and-bowled dismissals. Run-outs are credited
+            to each involved fielder, so individual dismissal totals may exceed wickets.
+        </p>
+        <div class="player-statistics-table-wrap">
+            <table class="player-statistics-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Player</th>
+                        <th>Team</th>
+                        <th>Tournament</th>
+                        <th>Season</th>
+                        <th>Matches</th>
+                        <th>Catches</th>
+                        <th>Stumpings</th>
+                        <th>Run-outs</th>
+                        <th>Total dismissals</th>
+                        <th>Dismissals per match</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="player-statistics-empty" colspan="11">
+                            Fielding records are not available in the imported analytics database.
+                            No statistics are inferred from batting dismissal descriptions.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</section>
+{% endblock %}

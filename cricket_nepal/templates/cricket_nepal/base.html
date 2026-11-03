@@ -21,6 +21,14 @@
                 <a href="{% url 'cricket_nepal:home' %}">Home</a>
                 <a href="{% url 'cricket_nepal:tournaments' %}">Tournaments</a>
                 <a href="{% url 'cricket_nepal:players' %}">Players</a>
+                <div class="nav-dropdown">
+                    <a href="{% url 'cricket_nepal:player_statistics_batting' %}" aria-haspopup="true">Player Statistics</a>
+                    <div class="nav-dropdown-menu">
+                        <a href="{% url 'cricket_nepal:player_statistics_batting' %}">Batting Stats</a>
+                        <a href="{% url 'cricket_nepal:player_statistics_bowling' %}">Bowling Stats</a>
+                        <a href="{% url 'cricket_nepal:player_statistics_compare' %}">Players Compare</a>
+                    </div>
+                </div>
                 <a href="{% url 'cricket_nepal:matches' %}">Matches</a>
             </nav>
         </div>

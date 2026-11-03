@@ -1682,6 +1682,589 @@ def get_top_bowling_stats(tournament_id: int, limit: int = 10) -> list[dict[str,
         return _rows_as_dicts(cursor)
 
 
+def _player_statistics_scope(
+    tournament_name: str,
+    season: str,
+    team_names: tuple[str, ...],
+    minimum_matches: int,
+    search_term: str,
+) -> tuple[str, list[Any]]:
+    team_filter = ""
+    params: list[Any] = [
+        tournament_name,
+        tournament_name,
+        season,
+        season,
+    ]
+    if team_names:
+        placeholders = ", ".join(["%s"] * len(team_names))
+        team_filter = f"AND mp.team_name IN ({placeholders})"
+        params.extend(team_names)
+    params.extend((minimum_matches, search_term))
+
+    return (
+        f"""
+        WITH selected_tournaments AS (
+            SELECT tournament_id, tournament_name, season
+            FROM tournaments
+            WHERE (%s = '' OR tournament_name = %s)
+              AND (%s = '' OR season = %s)
+        ),
+        scoped_match_players AS (
+            SELECT DISTINCT mp.match_id, p.player_id, mp.tournament_id,
+                            mp.team_name
+            FROM match_players AS mp
+            JOIN players AS p
+              ON p.cricsheet_player_id = mp.cricsheet_player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = mp.tournament_id
+            WHERE 1 = 1 {team_filter}
+        ),
+        scoped_player_tournaments AS (
+            SELECT DISTINCT player_id, tournament_id
+            FROM scoped_match_players
+        ),
+        player_matches AS (
+            SELECT b.player_id, m.tournament_id, b.match_id
+            FROM batting_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id
+             AND smp.player_id = b.player_id
+             AND smp.tournament_id = m.tournament_id
+            UNION
+            SELECT b.player_id, m.tournament_id, b.match_id
+            FROM bowling_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id
+             AND smp.player_id = b.player_id
+             AND smp.tournament_id = m.tournament_id
+        ),
+        player_match_counts AS (
+            SELECT pm.player_id, COUNT(DISTINCT pm.match_id) AS matches_played
+            FROM player_matches AS pm
+            JOIN scoped_player_tournaments AS spt
+              ON spt.player_id = pm.player_id
+             AND spt.tournament_id = pm.tournament_id
+            GROUP BY pm.player_id
+        ),
+        eligible_players AS (
+            SELECT counts.player_id
+            FROM player_match_counts AS counts
+            JOIN players AS p ON p.player_id = counts.player_id
+            WHERE counts.matches_played >= %s
+              AND instr(lower(p.player_name), lower(%s)) > 0
+        )
+        """,
+        params,
+    )
+
+
+def _assign_player_stat_ranks(
+    rows: list[dict[str, Any]],
+    sort_key: str,
+    qualification_key: str | None,
+) -> None:
+    rank = 0
+    previous_value: Any = object()
+    previous_rank = 0
+    for row in rows:
+        value = row[sort_key]
+        is_qualified = (
+            row.get(qualification_key, True) if qualification_key else True
+        )
+        if not is_qualified or value is None:
+            row["rank"] = None
+            continue
+        rank += 1
+        if value != previous_value:
+            previous_rank = rank
+            previous_value = value
+        row["rank"] = previous_rank
+
+
+def get_player_statistics(
+    tournament_name: str = "",
+    season: str = "",
+    team_name: str = "",
+    search_term: str = "",
+    minimum_matches: int = 1,
+    batting_sort: str = "runs",
+    bowling_sort: str = "wickets",
+) -> dict[str, Any]:
+    minimum_matches = max(0, minimum_matches)
+    tournaments = get_tournaments()
+    tournament_options = sorted(
+        {row["tournament_name"] for row in tournaments},
+        key=str.casefold,
+    )
+    if tournament_name not in tournament_options:
+        tournament_name = ""
+    season_options = sorted(
+        {
+            row["season"]
+            for row in tournaments
+            if not tournament_name or row["tournament_name"] == tournament_name
+        },
+        reverse=True,
+    )
+    if season not in season_options:
+        season = ""
+
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT mp.team_name
+            FROM match_players AS mp
+            JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
+            WHERE (%s = '' OR t.tournament_name = %s)
+              AND (%s = '' OR t.season = %s)
+            ORDER BY lower(mp.team_name), mp.team_name
+            """,
+            [tournament_name, tournament_name, season, season],
+        )
+        raw_team_options = [row[0] for row in cursor.fetchall()]
+
+    display_team_options = sorted(
+        {
+            _canonical_team_name(name) if not season else name
+            for name in raw_team_options
+        },
+        key=str.casefold,
+    )
+    if team_name not in display_team_options:
+        team_name = ""
+    team_filter_names = _team_name_aliases(team_name) if team_name else ()
+
+    batting_sort_options = {
+        "runs": ("Most runs", "runs DESC"),
+        "average": ("Highest average", "average_qualified DESC, average DESC"),
+        "strike_rate": (
+            "Highest strike rate",
+            "strike_rate_qualified DESC, strike_rate DESC",
+        ),
+        "fours": ("Most fours", "fours DESC"),
+        "sixes": ("Most sixes", "sixes DESC"),
+        "dot_ball_percentage": (
+            "Lowest dot-ball percentage",
+            "dot_ball_percentage_qualified DESC, dot_ball_percentage ASC",
+        ),
+    }
+    bowling_sort_options = {
+        "wickets": ("Most wickets", "wickets DESC"),
+        "average": ("Best bowling average", "average_qualified DESC, average ASC"),
+        "economy": ("Best economy", "economy_qualified DESC, economy ASC"),
+        "strike_rate": (
+            "Best bowling strike rate",
+            "strike_rate_qualified DESC, strike_rate ASC",
+        ),
+        "maidens": ("Most maidens", "maidens DESC"),
+        "dot_ball_percentage": (
+            "Lowest dot-ball percentage",
+            "dot_ball_percentage_qualified DESC, dot_ball_percentage ASC",
+        ),
+    }
+    if batting_sort not in batting_sort_options:
+        batting_sort = "runs"
+    if bowling_sort not in bowling_sort_options:
+        bowling_sort = "wickets"
+
+    common_ctes, common_params = _player_statistics_scope(
+        tournament_name,
+        season,
+        team_filter_names,
+        minimum_matches,
+        search_term,
+    )
+    batting_qualification = {
+        "average": "average_qualified",
+        "strike_rate": "strike_rate_qualified",
+        "dot_ball_percentage": "dot_ball_percentage_qualified",
+    }.get(batting_sort)
+    bowling_qualification = {
+        "average": "average_qualified",
+        "economy": "economy_qualified",
+        "strike_rate": "strike_rate_qualified",
+        "dot_ball_percentage": "dot_ball_percentage_qualified",
+    }.get(bowling_sort)
+
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            common_ctes
+            + f"""
+            , batting_totals AS (
+                SELECT p.player_id, p.player_name,
+                       MAX(pmc.matches_played) AS matches,
+                       SUM(s.innings_played) AS innings,
+                       SUM(s.total_runs) AS runs,
+                       SUM(s.times_out) AS dismissals,
+                       SUM(s.total_balls_faced) AS balls_faced,
+                       SUM(s.total_fours) AS fours,
+                       SUM(s.total_sixes) AS sixes,
+                       SUM(s.total_dot_balls) AS dot_balls,
+                       MAX(s.highest_score) AS highest_score,
+                       SUM(s.total_runs) * 1.0
+                           / NULLIF(SUM(s.times_out), 0) AS average,
+                       SUM(s.total_runs) * 100.0
+                           / NULLIF(SUM(s.total_balls_faced), 0) AS strike_rate,
+                       SUM(s.total_dot_balls) * 100.0
+                           / NULLIF(SUM(s.total_balls_faced), 0)
+                           AS dot_ball_percentage
+                FROM batting_stats_by_tournament AS s
+                JOIN scoped_player_tournaments AS spt
+                  ON spt.player_id = s.player_id
+                 AND spt.tournament_id = s.tournament_id
+                JOIN players AS p ON p.player_id = s.player_id
+                JOIN eligible_players AS ep ON ep.player_id = p.player_id
+                JOIN player_match_counts AS pmc ON pmc.player_id = p.player_id
+                GROUP BY p.player_id, p.player_name
+            ),
+            batting_qualified AS (
+                SELECT *,
+                       dismissals >= 3 AS average_qualified,
+                       balls_faced >= 60 AS strike_rate_qualified,
+                       balls_faced >= 60 AS dot_ball_percentage_qualified
+                FROM batting_totals
+            )
+            SELECT * FROM batting_qualified
+            ORDER BY {batting_sort_options[batting_sort][1]},
+                     lower(player_name), player_id
+            """,
+            common_params,
+        )
+        batting = _rows_as_dicts(cursor)
+
+        cursor.execute(
+            common_ctes
+            + f"""
+            , bowling_best_figures AS (
+                SELECT player_id,
+                       MAX(CAST(wickets AS TEXT) || '/' ||
+                           CAST(runs_conceded AS TEXT)) AS best_bowling_figures
+                FROM (
+                    SELECT b.player_id, b.wickets, b.runs_conceded,
+                           RANK() OVER (
+                               PARTITION BY b.player_id
+                               ORDER BY b.wickets DESC, b.runs_conceded ASC
+                           ) AS figure_rank
+                    FROM bowling_scorecards AS b
+                    JOIN matches AS m ON m.match_id = b.match_id
+                    JOIN scoped_match_players AS smp
+                      ON smp.match_id = b.match_id
+                     AND smp.player_id = b.player_id
+                    JOIN selected_tournaments AS st
+                      ON st.tournament_id = m.tournament_id
+                    JOIN eligible_players AS ep ON ep.player_id = b.player_id
+                ) AS ranked_figures
+                WHERE figure_rank = 1
+                GROUP BY player_id
+            ),
+            bowling_totals AS (
+                SELECT p.player_id, p.player_name,
+                       MAX(pmc.matches_played) AS matches,
+                       SUM(s.innings_bowled) AS innings,
+                       SUM(s.total_legal_balls) AS legal_balls,
+                       SUM(s.runs_conceded) AS runs_conceded,
+                       SUM(s.wickets) AS wickets,
+                       SUM(s.maidens) AS maidens,
+                       SUM(s.total_dot_balls) AS dot_balls,
+                       MAX(bf.best_bowling_figures) AS best_bowling_figures,
+                       SUM(s.runs_conceded) * 1.0
+                           / NULLIF(SUM(s.wickets), 0) AS average,
+                       SUM(s.runs_conceded) * 6.0
+                           / NULLIF(SUM(s.total_legal_balls), 0) AS economy,
+                       SUM(s.total_legal_balls) * 1.0
+                           / NULLIF(SUM(s.wickets), 0) AS strike_rate,
+                       SUM(s.total_dot_balls) * 100.0
+                           / NULLIF(SUM(s.total_legal_balls), 0)
+                           AS dot_ball_percentage
+                FROM bowling_stats_by_tournament AS s
+                JOIN scoped_player_tournaments AS spt
+                  ON spt.player_id = s.player_id
+                 AND spt.tournament_id = s.tournament_id
+                JOIN players AS p ON p.player_id = s.player_id
+                JOIN eligible_players AS ep ON ep.player_id = p.player_id
+                JOIN player_match_counts AS pmc ON pmc.player_id = p.player_id
+                LEFT JOIN bowling_best_figures AS bf
+                  ON bf.player_id = p.player_id
+                GROUP BY p.player_id, p.player_name
+            ),
+            bowling_qualified AS (
+                SELECT *,
+                       legal_balls >= 72 AND wickets > 0 AS average_qualified,
+                       legal_balls >= 72 AS economy_qualified,
+                       legal_balls >= 72 AND wickets > 0 AS strike_rate_qualified,
+                       legal_balls >= 72 AS dot_ball_percentage_qualified
+                FROM bowling_totals
+            )
+            SELECT * FROM bowling_qualified
+            ORDER BY {bowling_sort_options[bowling_sort][1]},
+                     lower(player_name), player_id
+            """,
+            common_params,
+        )
+        bowling = _rows_as_dicts(cursor)
+
+        cursor.execute(
+            common_ctes
+            + """
+            SELECT DISTINCT smp.player_id, smp.team_name,
+                            st.tournament_name, st.season
+            FROM scoped_match_players AS smp
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = smp.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = smp.player_id
+            ORDER BY smp.player_id, st.tournament_name, st.season,
+                     smp.team_name
+            """,
+            common_params,
+        )
+        metadata_rows = _rows_as_dicts(cursor)
+
+        performances = _get_player_best_performances(
+            cursor,
+            common_ctes,
+            common_params,
+            season,
+        )
+
+    metadata: dict[int, dict[str, set[Any]]] = {}
+    for row in metadata_rows:
+        player_metadata = metadata.setdefault(
+            row["player_id"],
+            {"teams": set(), "tournaments": set(), "seasons": set()},
+        )
+        team_label = (
+            _canonical_team_name(row["team_name"]) if not season else row["team_name"]
+        )
+        player_metadata["teams"].add(team_label)
+        player_metadata["tournaments"].add(row["tournament_name"])
+        player_metadata["seasons"].add(row["season"])
+
+    for row in batting + bowling:
+        player_metadata = metadata.get(row["player_id"], {})
+        row["teams"] = [
+            {
+                "team_name": name,
+                "team_slug": slugify(_canonical_team_name(name)),
+            }
+            for name in sorted(player_metadata.get("teams", set()), key=str.casefold)
+        ]
+        row["tournaments"] = [
+            {
+                "tournament_name": name,
+                "tournament_slug": slugify(name),
+                "has_overview": name == "Nepal Premier League",
+            }
+            for name in sorted(
+                player_metadata.get("tournaments", set()), key=str.casefold
+            )
+        ]
+        row["seasons"] = sorted(
+            player_metadata.get("seasons", set()), reverse=True
+        )
+    for row in bowling:
+        row["overs"] = (
+            f'{row["legal_balls"] // 6}.{row["legal_balls"] % 6}'
+        )
+
+    _assign_player_stat_ranks(
+        batting, batting_sort, batting_qualification
+    )
+    _assign_player_stat_ranks(
+        bowling, bowling_sort, bowling_qualification
+    )
+
+    return {
+        "tournament_options": tournament_options,
+        "season_options": season_options,
+        "team_options": display_team_options,
+        "selected_tournament": tournament_name,
+        "selected_season": season,
+        "selected_team": team_name,
+        "search_term": search_term,
+        "minimum_matches": minimum_matches,
+        "minimum_match_options": [0, 1, 3, 5],
+        "batting_sort": batting_sort,
+        "batting_sort_options": [
+            {"value": value, "label": label}
+            for value, (label, _) in batting_sort_options.items()
+        ],
+        "bowling_sort": bowling_sort,
+        "bowling_sort_options": [
+            {"value": value, "label": label}
+            for value, (label, _) in bowling_sort_options.items()
+        ],
+        "batting": batting,
+        "bowling": bowling,
+        "best_performances": performances,
+    }
+
+
+def _get_player_best_performances(
+    cursor: Any,
+    common_ctes: str,
+    common_params: list[Any],
+    season: str,
+) -> dict[str, list[dict[str, Any]]]:
+    performance_queries = {
+        "highest_score": (
+            """
+            SELECT p.player_id, p.player_name, smp.team_name,
+                   st.tournament_name, st.season, b.match_id,
+                   m.match_date, SUM(b.runs) AS value, NULL AS extra_value
+            FROM batting_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = m.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = b.player_id
+            JOIN players AS p ON p.player_id = b.player_id
+            GROUP BY p.player_id, p.player_name, smp.team_name,
+                     st.tournament_name, st.season, b.match_id,
+                     m.match_date, b.innings_number
+            """,
+            "value DESC",
+            "batting_scorecards",
+        ),
+        "most_runs_in_innings": (
+            """
+            SELECT p.player_id, p.player_name, smp.team_name,
+                   st.tournament_name, st.season, b.match_id,
+                   m.match_date, SUM(b.runs) AS value, NULL AS extra_value
+            FROM batting_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = m.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = b.player_id
+            JOIN players AS p ON p.player_id = b.player_id
+            GROUP BY p.player_id, p.player_name, smp.team_name,
+                     st.tournament_name, st.season, b.match_id,
+                     m.match_date, b.innings_number
+            """,
+            "value DESC",
+            "batting_scorecards",
+        ),
+        "highest_strike_rate": (
+            """
+            SELECT p.player_id, p.player_name, smp.team_name,
+                   st.tournament_name, st.season, b.match_id,
+                   m.match_date,
+                   SUM(b.runs) * 100.0 / NULLIF(SUM(b.balls_faced), 0)
+                       AS value,
+                   SUM(b.balls_faced) AS extra_value
+            FROM batting_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = m.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = b.player_id
+            JOIN players AS p ON p.player_id = b.player_id
+            GROUP BY p.player_id, p.player_name, smp.team_name,
+                     st.tournament_name, st.season, b.match_id, m.match_date
+            HAVING SUM(b.balls_faced) >= 10
+            """,
+            "value DESC",
+            "batting_match",
+        ),
+        "best_bowling_figures": (
+            """
+            SELECT p.player_id, p.player_name, smp.team_name,
+                   st.tournament_name, st.season, b.match_id,
+                   m.match_date,
+                   b.wickets AS value, b.runs_conceded AS extra_value
+            FROM bowling_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = m.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = b.player_id
+            JOIN players AS p ON p.player_id = b.player_id
+            """,
+            "value DESC, extra_value ASC",
+            "bowling_scorecards",
+        ),
+        "most_wickets_in_innings": (
+            """
+            SELECT p.player_id, p.player_name, smp.team_name,
+                   st.tournament_name, st.season, b.match_id,
+                   m.match_date,
+                   b.wickets AS value, NULL AS extra_value
+            FROM bowling_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = m.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = b.player_id
+            JOIN players AS p ON p.player_id = b.player_id
+            """,
+            "value DESC",
+            "bowling_scorecards",
+        ),
+        "best_economy": (
+            """
+            SELECT p.player_id, p.player_name, smp.team_name,
+                   st.tournament_name, st.season, b.match_id,
+                   m.match_date,
+                   SUM(b.runs_conceded) * 6.0
+                       / NULLIF(SUM(b.legal_balls_bowled), 0) AS value,
+                   SUM(b.legal_balls_bowled) AS extra_value
+            FROM bowling_scorecards AS b
+            JOIN matches AS m ON m.match_id = b.match_id
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            JOIN selected_tournaments AS st
+              ON st.tournament_id = m.tournament_id
+            JOIN eligible_players AS ep ON ep.player_id = b.player_id
+            JOIN players AS p ON p.player_id = b.player_id
+            GROUP BY p.player_id, p.player_name, smp.team_name,
+                     st.tournament_name, st.season, b.match_id, m.match_date
+            HAVING SUM(b.legal_balls_bowled) >= 24
+            """,
+            "value ASC",
+            "bowling_match",
+        ),
+    }
+    performances = {}
+    for record, (source_query, ordering, _) in performance_queries.items():
+        query = (
+            common_ctes
+            + ", candidate_records AS ("
+            + source_query
+            + f"""
+            ),
+            ranked_records AS (
+                SELECT *, RANK() OVER (ORDER BY {ordering}) AS record_rank
+                FROM candidate_records
+            )
+            SELECT * FROM ranked_records
+            WHERE record_rank = 1
+            ORDER BY lower(player_name), player_id, match_id
+            """
+        )
+        cursor.execute(query, common_params)
+        rows = _rows_as_dicts(cursor)
+        for row in rows:
+            if not season:
+                row["team_name"] = _canonical_team_name(row["team_name"])
+            row["team_slug"] = slugify(_canonical_team_name(row["team_name"]))
+            row["tournament_slug"] = slugify(row["tournament_name"])
+            row["has_tournament_overview"] = (
+                row["tournament_name"] == "Nepal Premier League"
+            )
+            if record == "best_economy":
+                row["overs"] = f'{row["extra_value"] // 6}.{row["extra_value"] % 6}'
+        performances[record] = rows
+    return performances
+
+
 def _player_team_evidence_cte() -> str:
     return """
         WITH player_teams AS (

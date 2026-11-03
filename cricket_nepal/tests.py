@@ -2,13 +2,17 @@ import re
 import sqlite3
 import tempfile
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import Client, SimpleTestCase
 from django.urls import reverse
 
 from cricket_nepal.data_access import (
     _build_npl_team_directory,
+    get_player_profile,
+    get_player_statistics,
+    get_tournaments,
     _npl_points_table,
 )
 from scripts.import_parquet_to_sqlite import read_source_data, rebuild_database
@@ -1742,3 +1746,335 @@ class PlayerProfileTests(SimpleTestCase):
             season_label="All seasons",
         )
         self.assertFalse(missing_player_chart["available"])
+
+
+class PlayerStatisticsPageTests(TestCase):
+    def test_overall_rates_match_existing_player_profile_aggregates(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        multi_season_player = next(
+            (
+                row
+                for row in statistics["batting"]
+                if len(get_player_profile(row["player_id"])["season_stats"]) > 1
+            ),
+            None,
+        )
+        self.assertIsNotNone(multi_season_player)
+
+        profile = get_player_profile(multi_season_player["player_id"])
+        batting = profile["overall"]["batting"]
+        row = multi_season_player
+        self.assertEqual(row["runs"], batting["runs"])
+        self.assertAlmostEqual(row["average"], batting["average"])
+        self.assertAlmostEqual(row["strike_rate"], batting["strike_rate"])
+        self.assertAlmostEqual(
+            row["dot_ball_percentage"], batting["dot_ball_percentage"]
+        )
+
+        bowling_row = next(
+            item
+            for item in statistics["bowling"]
+            if item["player_id"] == multi_season_player["player_id"]
+        )
+        bowling = profile["overall"]["bowling"]
+        self.assertEqual(bowling_row["wickets"], bowling["wickets"])
+        self.assertAlmostEqual(bowling_row["average"], bowling["average"])
+        self.assertAlmostEqual(bowling_row["economy"], bowling["economy"])
+        self.assertAlmostEqual(bowling_row["strike_rate"], bowling["strike_rate"])
+
+    def test_tournament_and_season_filters_match_profile_season_totals(self):
+        tournament = get_tournaments()[0]
+        statistics = get_player_statistics(
+            tournament_name=tournament["tournament_name"],
+            season=tournament["season"],
+            minimum_matches=0,
+        )
+        self.assertEqual(
+            statistics["selected_tournament"], tournament["tournament_name"]
+        )
+        self.assertEqual(statistics["selected_season"], tournament["season"])
+        self.assertIn(tournament["season"], statistics["season_options"])
+
+        row = statistics["batting"][0]
+        profile = get_player_profile(row["player_id"])
+        profile_season = next(
+            season
+            for season in profile["season_stats"]
+            if season["tournament_id"] == tournament["tournament_id"]
+        )
+        self.assertEqual(row["runs"], profile_season["total_runs"])
+        self.assertAlmostEqual(
+            row["average"], profile_season["batting_average"], places=2
+        )
+        self.assertAlmostEqual(
+            row["strike_rate"], profile_season["batting_strike_rate"], places=2
+        )
+
+    def test_team_search_and_minimum_match_filters_combine(self):
+        all_statistics = get_player_statistics(minimum_matches=0)
+        target = all_statistics["batting"][0]
+        target_team = target["teams"][0]["team_name"]
+        search_text = target["player_name"][:4]
+        filtered = get_player_statistics(
+            team_name=target_team,
+            search_term=search_text,
+            minimum_matches=1,
+        )
+        self.assertEqual(filtered["selected_team"], target_team)
+        self.assertTrue(filtered["batting"])
+        self.assertTrue(
+            all(
+                search_text.casefold() in row["player_name"].casefold()
+                for row in filtered["batting"]
+            )
+        )
+        self.assertTrue(
+            all(
+                team["team_name"] == target_team
+                for row in filtered["batting"]
+                for team in row["teams"]
+            )
+        )
+        self.assertTrue(
+            all(
+                record["team_name"] == target_team
+                and search_text.casefold() in record["player_name"].casefold()
+                for records in filtered["best_performances"].values()
+                for record in records
+            )
+        )
+
+        qualified = get_player_statistics(minimum_matches=3)
+        self.assertTrue(all(row["matches"] >= 3 for row in qualified["batting"]))
+        self.assertTrue(all(row["matches"] >= 3 for row in qualified["bowling"]))
+
+    def test_leaderboard_sorting_and_rate_qualifications(self):
+        runs = get_player_statistics(
+            minimum_matches=0,
+            batting_sort="runs",
+            bowling_sort="wickets",
+        )
+        self.assertEqual(
+            [row["runs"] for row in runs["batting"]],
+            sorted((row["runs"] for row in runs["batting"]), reverse=True),
+        )
+        self.assertEqual(
+            [row["wickets"] for row in runs["bowling"]],
+            sorted((row["wickets"] for row in runs["bowling"]), reverse=True),
+        )
+
+        rate_sorted = get_player_statistics(
+            minimum_matches=0,
+            batting_sort="average",
+            bowling_sort="economy",
+        )
+        qualified_batting = [
+            row for row in rate_sorted["batting"] if row["average_qualified"]
+        ]
+        self.assertEqual(
+            [row["average"] for row in qualified_batting],
+            sorted(
+                (row["average"] for row in qualified_batting),
+                reverse=True,
+            ),
+        )
+        self.assertTrue(
+            all(
+                row["rank"] is None
+                for row in rate_sorted["batting"]
+                if not row["average_qualified"]
+            )
+        )
+        qualified_bowling = [
+            row for row in rate_sorted["bowling"] if row["economy_qualified"]
+        ]
+        self.assertEqual(
+            [row["economy"] for row in qualified_bowling],
+            sorted(row["economy"] for row in qualified_bowling),
+        )
+        self.assertTrue(
+            all(
+                row["rank"] is None
+                for row in rate_sorted["bowling"]
+                if not row["economy_qualified"]
+            )
+        )
+
+    def test_zero_dismissal_and_zero_wicket_rates_are_unranked(self):
+        statistics = get_player_statistics(
+            minimum_matches=0,
+            batting_sort="average",
+            bowling_sort="average",
+        )
+        zero_dismissal = [
+            row for row in statistics["batting"] if row["dismissals"] == 0
+        ]
+        zero_wicket = [
+            row for row in statistics["bowling"] if row["wickets"] == 0
+        ]
+        self.assertTrue(zero_dismissal)
+        self.assertTrue(zero_wicket)
+        self.assertTrue(
+            all(
+                row["average"] is None and row["rank"] is None
+                for row in zero_dismissal
+            )
+        )
+        self.assertTrue(
+            all(
+                row["average"] is None and row["rank"] is None
+                for row in zero_wicket
+            )
+        )
+
+    def test_kathmandu_historical_names_are_preserved_by_season(self):
+        for season, historical_name in (
+            ("2024/25", "Kathmandu Gurkhas"),
+            ("2025/26", "Kathmandu Gorkhas"),
+        ):
+            statistics = get_player_statistics(
+                season=season,
+                team_name=historical_name,
+                minimum_matches=0,
+            )
+            self.assertEqual(statistics["selected_team"], historical_name)
+            self.assertTrue(statistics["batting"])
+            self.assertTrue(
+                all(
+                    team["team_name"] == historical_name
+                    for row in statistics["batting"]
+                    for team in row["teams"]
+                )
+            )
+
+        overall = get_player_statistics(
+            team_name="Kathmandu Gorkhas",
+            minimum_matches=0,
+        )
+        self.assertIn("Kathmandu Gorkhas", overall["team_options"])
+        self.assertNotIn("Kathmandu Gurkhas", overall["team_options"])
+        self.assertTrue(
+            all(
+                team["team_name"] == "Kathmandu Gorkhas"
+                for row in overall["batting"]
+                for team in row["teams"]
+            )
+        )
+
+    def test_best_performance_qualifications_apply_to_selected_scope(self):
+        statistics = get_player_statistics(minimum_matches=0)
+        self.assertTrue(statistics["best_performances"]["highest_strike_rate"])
+        self.assertTrue(statistics["best_performances"]["best_economy"])
+        self.assertTrue(
+            all(
+                row["extra_value"] >= 10
+                for row in statistics["best_performances"]["highest_strike_rate"]
+            )
+        )
+        self.assertTrue(
+            all(
+                row["extra_value"] >= 24
+                for row in statistics["best_performances"]["best_economy"]
+            )
+        )
+
+    def test_page_links_to_players_teams_tournaments_and_scorecards(self):
+        response = Client().get(reverse("cricket_nepal:player_statistics"))
+        self.assertEqual(response.status_code, 200)
+        rendered = response.content.decode()
+        self.assertIn("Player Statistics", rendered)
+        self.assertIn("All Tournaments", rendered)
+
+        statistics = response.context["statistics"]
+        self.assertIn(
+            reverse(
+                "cricket_nepal:player_profile",
+                args=[statistics["batting"][0]["player_id"]],
+            ),
+            rendered,
+        )
+        self.assertIn(
+            reverse(
+                "cricket_nepal:team_profile",
+                args=[statistics["batting"][0]["teams"][0]["team_slug"]],
+            ),
+            rendered,
+        )
+        self.assertIn(
+            reverse(
+                "cricket_nepal:tournament_overview",
+                kwargs={"tournament_slug": "nepal-premier-league"},
+            ),
+            rendered,
+        )
+        best_score = statistics["best_performances"]["highest_score"][0]
+        self.assertIn(
+            reverse("cricket_nepal:match_detail", args=[best_score["match_id"]]),
+            rendered,
+        )
+
+    def test_statistics_views_separate_batting_bowling_and_comparison(self):
+        client = Client()
+        batting_response = client.get(
+            reverse("cricket_nepal:player_statistics_batting")
+        )
+        batting_html = batting_response.content.decode()
+        self.assertEqual(batting_response.status_code, 200)
+        self.assertIn("Batting statistics", batting_html)
+        self.assertNotIn("Bowling statistics", batting_html)
+
+        bowling_response = client.get(
+            reverse("cricket_nepal:player_statistics_bowling")
+        )
+        bowling_html = bowling_response.content.decode()
+        self.assertEqual(bowling_response.status_code, 200)
+        self.assertIn("Bowling statistics", bowling_html)
+        self.assertNotIn("Batting statistics", bowling_html)
+
+        compare_response = client.get(
+            reverse("cricket_nepal:player_statistics_compare")
+        )
+        compare_html = compare_response.content.decode()
+        self.assertEqual(compare_response.status_code, 200)
+        self.assertIn("Players Compare", compare_html)
+        self.assertIn(
+            "Side-by-side player comparisons will be added here",
+            compare_html,
+        )
+        self.assertNotIn("Batting statistics", compare_html)
+        self.assertNotIn("Bowling statistics", compare_html)
+
+    def test_player_statistics_header_has_three_separate_pages(self):
+        response = Client().get(reverse("cricket_nepal:player_statistics"))
+        rendered = response.content.decode()
+        self.assertEqual(response.status_code, 200)
+        for page_name in (
+            "player_statistics_batting",
+            "player_statistics_bowling",
+            "player_statistics_compare",
+        ):
+            self.assertIn(reverse(f"cricket_nepal:{page_name}"), rendered)
+        self.assertNotIn('name="view"', rendered)
+
+    def test_filters_reject_unknown_values_and_search_is_case_insensitive(self):
+        statistics = get_player_statistics(
+            tournament_name="Not a tournament",
+            season="Not a season",
+            team_name="Not a team",
+            search_term="rk paudel",
+            minimum_matches=0,
+        )
+        self.assertEqual(statistics["selected_tournament"], "")
+        self.assertEqual(statistics["selected_season"], "")
+        self.assertEqual(statistics["selected_team"], "")
+        self.assertEqual(
+            set(statistics["tournament_options"]),
+            {tournament["tournament_name"] for tournament in get_tournaments()},
+        )
+        self.assertTrue(statistics["batting"])
+        self.assertTrue(
+            all(
+                "rk paudel" in row["player_name"].casefold()
+                for row in statistics["batting"]
+            )
+        )

@@ -1,0 +1,231 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}Player Statistics · Nepal Cricket Dataset{% endblock %}
+
+{% block content %}
+<section class="page-section player-statistics-page">
+    <header class="player-statistics-header">
+        <p class="eyebrow section-eyebrow">Dataset-wide comparison</p>
+        <h1>Player Statistics</h1>
+        <p class="section-intro">Compare batting and bowling performances across the competitions and seasons in the Nepal Cricket Dataset.</p>
+    </header>
+
+    <form class="player-statistics-filters" method="get" aria-label="Filter player statistics">
+        <div class="player-statistics-filter-grid">
+            <label>
+                Tournament
+                <select name="tournament">
+                    <option value="">All Tournaments</option>
+                    {% for tournament in statistics.tournament_options %}
+                    <option value="{{ tournament }}"{% if statistics.selected_tournament == tournament %} selected{% endif %}>{{ tournament }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Season
+                <select name="season">
+                    <option value="">All Seasons</option>
+                    {% for season in statistics.season_options %}
+                    <option value="{{ season }}"{% if statistics.selected_season == season %} selected{% endif %}>{{ season }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Team
+                <select name="team">
+                    <option value="">All Teams</option>
+                    {% for team in statistics.team_options %}
+                    <option value="{{ team }}"{% if statistics.selected_team == team %} selected{% endif %}>{{ team }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Player search
+                <input type="search" name="q" value="{{ statistics.search_term }}" placeholder="Search player name">
+            </label>
+            <label>
+                Minimum matches
+                <select name="minimum_matches">
+                    {% for count in statistics.minimum_match_options %}
+                    <option value="{{ count }}"{% if statistics.minimum_matches == count %} selected{% endif %}>{{ count }}+</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% if statistics_view == "batting" %}
+            <label>
+                Batting sort
+                <select name="batting_sort">
+                    {% for option in statistics.batting_sort_options %}
+                    <option value="{{ option.value }}"{% if statistics.batting_sort == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            {% if statistics_view == "bowling" %}
+            <label>
+                Bowling sort
+                <select name="bowling_sort">
+                    {% for option in statistics.bowling_sort_options %}
+                    <option value="{{ option.value }}"{% if statistics.bowling_sort == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+        </div>
+        <div class="player-statistics-filter-actions">
+            <button type="submit">Apply filters</button>
+            <a href="{% url statistics_page_url %}">Clear filters</a>
+        </div>
+    </form>
+
+    {% if statistics_view == "compare" %}
+    <section class="player-statistics-view-placeholder" aria-labelledby="player-comparison-title">
+        <p class="eyebrow section-eyebrow">Player comparison</p>
+        <h2 id="player-comparison-title">Players Compare</h2>
+        <p>Side-by-side player comparisons will be added here in a future update.</p>
+    </section>
+    {% endif %}
+
+    {% if statistics_view == "batting" %}
+    <section class="player-stats-section" aria-labelledby="player-statistics-batting">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Batting leaderboard</p>
+                <h2 id="player-statistics-batting">Batting statistics</h2>
+            </div>
+            <span class="player-muted">{{ statistics.batting|length }} players</span>
+        </div>
+        <div class="player-statistics-table-wrap">
+            <table class="player-statistics-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th><th>Player</th><th>Team</th><th>Tournament</th><th>Season</th>
+                        <th>Matches</th><th>Innings</th><th>Runs</th><th>Average</th><th>Strike rate</th>
+                        <th>Balls faced</th><th>Fours</th><th>Sixes</th><th>Dot-ball %</th><th>Highest score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in statistics.batting %}
+                    <tr>
+                        <td>{{ row.rank|default:"—" }}</td>
+                        <th scope="row"><a href="{% url 'cricket_nepal:player_profile' row.player_id %}">{{ row.player_name }}</a></th>
+                        <td>{% for team in row.teams %}<a href="{% url 'cricket_nepal:team_profile' team.team_slug %}">{{ team.team_name }}</a>{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+                        <td>{% for tournament in row.tournaments %}{% if tournament.has_overview %}<a href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">{{ tournament.tournament_name }}</a>{% else %}{{ tournament.tournament_name }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+                        <td>{{ row.seasons|join:", "|default:"—" }}</td>
+                        <td>{{ row.matches }}</td><td>{{ row.innings }}</td><td>{{ row.runs }}</td>
+                        <td>{% if row.average is not None %}{{ row.average|floatformat:2 }}{% else %}—{% endif %}{% if not row.average_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.strike_rate is not None %}{{ row.strike_rate|floatformat:2 }}{% else %}—{% endif %}{% if not row.strike_rate_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{{ row.balls_faced }}</td><td>{{ row.fours }}</td><td>{{ row.sixes }}</td>
+                        <td>{% if row.dot_ball_percentage is not None %}{{ row.dot_ball_percentage|floatformat:2 }}%{% else %}—{% endif %}{% if not row.dot_ball_percentage_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{{ row.highest_score|default_if_none:"—" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td class="player-statistics-empty" colspan="15">No batting records match these filters.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="team-qualification-note">Minimum matches: {{ statistics.minimum_matches }}. Batting average is qualified at 3 dismissals; strike rate and dot-ball percentage at 60 balls faced. Rates are recalculated from combined runs, dismissals and balls.</p>
+    </section>
+    {% endif %}
+
+    {% if statistics_view == "bowling" %}
+    <section class="player-stats-section" aria-labelledby="player-statistics-bowling">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Bowling leaderboard</p>
+                <h2 id="player-statistics-bowling">Bowling statistics</h2>
+            </div>
+            <span class="player-muted">{{ statistics.bowling|length }} players</span>
+        </div>
+        <div class="player-statistics-table-wrap">
+            <table class="player-statistics-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th><th>Player</th><th>Team</th><th>Tournament</th><th>Season</th>
+                        <th>Matches</th><th>Innings</th><th>Overs</th><th>Runs conceded</th><th>Wickets</th>
+                        <th>Average</th><th>Economy</th><th>Strike rate</th><th>Maidens</th><th>Dot-ball %</th><th>Best figures</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in statistics.bowling %}
+                    <tr>
+                        <td>{{ row.rank|default:"—" }}</td>
+                        <th scope="row"><a href="{% url 'cricket_nepal:player_profile' row.player_id %}">{{ row.player_name }}</a></th>
+                        <td>{% for team in row.teams %}<a href="{% url 'cricket_nepal:team_profile' team.team_slug %}">{{ team.team_name }}</a>{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+                        <td>{% for tournament in row.tournaments %}{% if tournament.has_overview %}<a href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">{{ tournament.tournament_name }}</a>{% else %}{{ tournament.tournament_name }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+                        <td>{{ row.seasons|join:", "|default:"—" }}</td>
+                        <td>{{ row.matches }}</td><td>{{ row.innings }}</td><td>{{ row.overs }}</td>
+                        <td>{{ row.runs_conceded }}</td><td>{{ row.wickets }}</td>
+                        <td>{% if row.average is not None %}{{ row.average|floatformat:2 }}{% else %}—{% endif %}{% if not row.average_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.economy is not None %}{{ row.economy|floatformat:2 }}{% else %}—{% endif %}{% if not row.economy_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{% if row.strike_rate is not None %}{{ row.strike_rate|floatformat:2 }}{% else %}—{% endif %}{% if not row.strike_rate_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{{ row.maidens }}</td>
+                        <td>{% if row.dot_ball_percentage is not None %}{{ row.dot_ball_percentage|floatformat:2 }}%{% else %}—{% endif %}{% if not row.dot_ball_percentage_qualified %}<small class="player-statistics-unqualified">Not qualified</small>{% endif %}</td>
+                        <td>{{ row.best_bowling_figures|default:"—" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td class="player-statistics-empty" colspan="16">No bowling records match these filters.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="team-qualification-note">Bowling average, economy, strike rate and dot-ball percentage are qualified at 72 legal balls. A zero-wicket bowling average or strike rate is not ranked. Rates are calculated from combined runs, wickets and legal balls.</p>
+    </section>
+    {% endif %}
+
+    {% if statistics_view == "batting" or statistics_view == "bowling" %}
+    <section class="player-stats-section" aria-labelledby="player-statistics-records">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Filtered records</p>
+                <h2 id="player-statistics-records">{% if statistics_view == "batting" %}Batting records{% else %}Bowling records{% endif %}</h2>
+            </div>
+        </div>
+        <div class="player-statistics-record-grid">
+            {% if statistics_view == "batting" %}
+            <article class="team-leader-card">
+                <h3>Highest individual score / most runs in an innings</h3>
+                {% for record in statistics.best_performances.highest_score %}
+                <p><a href="{% url 'cricket_nepal:player_profile' record.player_id %}">{{ record.player_name }}</a><strong>{{ record.value }}</strong></p>
+                <small>{% if record.has_tournament_overview %}<a href="{% url 'cricket_nepal:tournament_overview' record.tournament_slug %}">{{ record.tournament_name }}</a>{% else %}{{ record.tournament_name }}{% endif %} · {{ record.season }} · <a href="{% url 'cricket_nepal:team_profile' record.team_slug %}">{{ record.team_name }}</a> · <a href="{% url 'cricket_nepal:match_detail' record.match_id %}">{{ record.match_date }} scorecard</a></small>
+                {% empty %}<p class="player-muted">No records match these filters.</p>{% endfor %}
+            </article>
+            <article class="team-leader-card">
+                <h3>Highest strike rate in a match</h3>
+                <p class="team-qualification-note">Minimum 10 balls faced.</p>
+                {% for record in statistics.best_performances.highest_strike_rate %}
+                <p><a href="{% url 'cricket_nepal:player_profile' record.player_id %}">{{ record.player_name }}</a><strong>{{ record.value|floatformat:2 }}</strong></p>
+                <small>{{ record.extra_value }} balls · {% if record.has_tournament_overview %}<a href="{% url 'cricket_nepal:tournament_overview' record.tournament_slug %}">{{ record.tournament_name }}</a>{% else %}{{ record.tournament_name }}{% endif %} · {{ record.season }} · <a href="{% url 'cricket_nepal:team_profile' record.team_slug %}">{{ record.team_name }}</a> · <a href="{% url 'cricket_nepal:match_detail' record.match_id %}">{{ record.match_date }} scorecard</a></small>
+                {% empty %}<p class="player-muted">No qualified records match these filters.</p>{% endfor %}
+            </article>
+            {% endif %}
+            {% if statistics_view == "bowling" %}
+            <article class="team-leader-card">
+                <h3>Best bowling figures</h3>
+                {% for record in statistics.best_performances.best_bowling_figures %}
+                <p><a href="{% url 'cricket_nepal:player_profile' record.player_id %}">{{ record.player_name }}</a><strong>{{ record.value }}/{{ record.extra_value }}</strong></p>
+                <small>{% if record.has_tournament_overview %}<a href="{% url 'cricket_nepal:tournament_overview' record.tournament_slug %}">{{ record.tournament_name }}</a>{% else %}{{ record.tournament_name }}{% endif %} · {{ record.season }} · <a href="{% url 'cricket_nepal:team_profile' record.team_slug %}">{{ record.team_name }}</a> · <a href="{% url 'cricket_nepal:match_detail' record.match_id %}">{{ record.match_date }} scorecard</a></small>
+                {% empty %}<p class="player-muted">No records match these filters.</p>{% endfor %}
+            </article>
+            <article class="team-leader-card">
+                <h3>Most wickets in an innings</h3>
+                {% for record in statistics.best_performances.most_wickets_in_innings %}
+                <p><a href="{% url 'cricket_nepal:player_profile' record.player_id %}">{{ record.player_name }}</a><strong>{{ record.value }} wickets</strong></p>
+                <small>{% if record.has_tournament_overview %}<a href="{% url 'cricket_nepal:tournament_overview' record.tournament_slug %}">{{ record.tournament_name }}</a>{% else %}{{ record.tournament_name }}{% endif %} · {{ record.season }} · <a href="{% url 'cricket_nepal:team_profile' record.team_slug %}">{{ record.team_name }}</a> · <a href="{% url 'cricket_nepal:match_detail' record.match_id %}">{{ record.match_date }} scorecard</a></small>
+                {% empty %}<p class="player-muted">No records match these filters.</p>{% endfor %}
+            </article>
+            <article class="team-leader-card">
+                <h3>Best economy in a match</h3>
+                <p class="team-qualification-note">Minimum 24 legal balls (4 overs).</p>
+                {% for record in statistics.best_performances.best_economy %}
+                <p><a href="{% url 'cricket_nepal:player_profile' record.player_id %}">{{ record.player_name }}</a><strong>{{ record.value|floatformat:2 }}</strong></p>
+                <small>{{ record.overs }} overs · {% if record.has_tournament_overview %}<a href="{% url 'cricket_nepal:tournament_overview' record.tournament_slug %}">{{ record.tournament_name }}</a>{% else %}{{ record.tournament_name }}{% endif %} · {{ record.season }} · <a href="{% url 'cricket_nepal:team_profile' record.team_slug %}">{{ record.team_name }}</a> · <a href="{% url 'cricket_nepal:match_detail' record.match_id %}">{{ record.match_date }} scorecard</a></small>
+                {% empty %}<p class="player-muted">No qualified records match these filters.</p>{% endfor %}
+            </article>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+</section>
+{% endblock %}

@@ -17,5 +17,24 @@ urlpatterns = [
     path("teams/", views.teams, name="teams"),
     path("teams/<slug:team_slug>/", views.team_profile, name="team_profile"),
     path("players/", views.players, name="players"),
+    path("player-statistics/", views.player_statistics, name="player_statistics"),
+    path(
+        "player-statistics/batting/",
+        views.player_statistics,
+        {"statistics_view": "batting"},
+        name="player_statistics_batting",
+    ),
+    path(
+        "player-statistics/bowling/",
+        views.player_statistics,
+        {"statistics_view": "bowling"},
+        name="player_statistics_bowling",
+    ),
+    path(
+        "player-statistics/compare/",
+        views.player_statistics,
+        {"statistics_view": "compare"},
+        name="player_statistics_compare",
+    ),
     path("players/<int:player_id>/", views.player_profile, name="player_profile"),
 ]

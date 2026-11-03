@@ -7,6 +7,7 @@ from cricket_nepal.data_access import (
     get_npl_team_directory,
     get_team_profile,
     get_player_directory,
+    get_player_statistics,
     get_player_match_performance,
     get_player_profile,
     get_player_radar_comparison,
@@ -185,6 +186,36 @@ def players(request):
         {
             "players": get_player_directory(search_term),
             "search_term": search_term,
+        },
+    )
+
+
+def player_statistics(request, statistics_view="batting"):
+    try:
+        minimum_matches = int(request.GET.get("minimum_matches", "1"))
+    except ValueError:
+        minimum_matches = 1
+
+    statistics = get_player_statistics(
+        tournament_name=request.GET.get("tournament", "").strip()[:100],
+        season=request.GET.get("season", "").strip()[:30],
+        team_name=request.GET.get("team", "").strip()[:100],
+        search_term=request.GET.get("q", "").strip()[:100],
+        minimum_matches=min(max(minimum_matches, 0), 20),
+        batting_sort=request.GET.get("batting_sort", "runs"),
+        bowling_sort=request.GET.get("bowling_sort", "wickets"),
+    )
+    return render(
+        request,
+        "cricket_nepal/player_statistics.html",
+        {
+            "statistics": statistics,
+            "statistics_view": statistics_view,
+            "statistics_page_url": {
+                "batting": "cricket_nepal:player_statistics_batting",
+                "bowling": "cricket_nepal:player_statistics_bowling",
+                "compare": "cricket_nepal:player_statistics_compare",
+            }[statistics_view],
         },
     )
 

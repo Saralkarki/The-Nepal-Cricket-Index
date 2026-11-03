@@ -4,6 +4,7 @@ from django.utils.text import slugify
 
 from cricket_nepal.data_access import (
     get_team_directory,
+    get_npl_team_directory,
     get_team_profile,
     get_player_directory,
     get_player_match_performance,
@@ -189,10 +190,30 @@ def players(request):
 
 
 def teams(request):
+    seasons = [
+        season
+        for season in get_tournaments()
+        if season["tournament_name"] == "Nepal Premier League"
+    ]
+    selected_season = next(
+        (
+            season
+            for season in seasons
+            if str(season["tournament_id"]) == request.GET.get("season_id")
+        ),
+        None,
+    )
+    directory = get_npl_team_directory(
+        selected_season["tournament_id"] if selected_season else None
+    )
     return render(
         request,
         "cricket_nepal/teams.html",
-        {"teams": get_team_directory()},
+        {
+            "teams": directory["teams"],
+            "seasons": directory["seasons"],
+            "selected_season": directory["selected_season"],
+        },
     )
 
 

@@ -10,7 +10,11 @@
 
     <div class="match-detail-heading">
         <p class="eyebrow section-eyebrow">{{ match.tournament_name }} · {{ match.season }}</p>
-        <h1>{{ match.team_1_name }} <span>v</span> {{ match.team_2_name }}</h1>
+        <h1>
+            {% if match.team_1_slug %}<a class="match-team-profile-link" href="{% url 'cricket_nepal:team_profile' match.team_1_slug %}">{{ match.team_1_name }}</a>{% else %}{{ match.team_1_name }}{% endif %}
+            <span>v</span>
+            {% if match.team_2_slug %}<a class="match-team-profile-link" href="{% url 'cricket_nepal:team_profile' match.team_2_slug %}">{{ match.team_2_name }}</a>{% else %}{{ match.team_2_name }}{% endif %}
+        </h1>
         <p class="match-detail-date">{{ match.match_date }} · {{ match.match_format }}</p>
     </div>
 
@@ -19,7 +23,7 @@
             <p class="match-date-label">Result</p>
             {% if match.winner_name %}
             <p class="match-detail-result">
-                {{ match.winner_name }} won
+                {% if match.winner_slug %}<a class="match-team-profile-link" href="{% url 'cricket_nepal:team_profile' match.winner_slug %}">{{ match.winner_name }}</a>{% else %}{{ match.winner_name }}{% endif %} won
                 {% if match.margin and match.margin_type %}by {{ match.margin }} {{ match.margin_type }}{% endif %}
             </p>
             {% else %}
@@ -37,7 +41,7 @@
         <div>
             <p class="match-date-label">Toss</p>
             {% if match.toss_winner_name %}
-            <p>{{ match.toss_winner_name }} won{% if match.toss_decision %} and chose to {{ match.toss_decision }}{% endif %}</p>
+            <p>{% if match.toss_winner_slug %}<a class="match-team-profile-link" href="{% url 'cricket_nepal:team_profile' match.toss_winner_slug %}">{{ match.toss_winner_name }}</a>{% else %}{{ match.toss_winner_name }}{% endif %} won{% if match.toss_decision %} and chose to {{ match.toss_decision }}{% endif %}</p>
             {% else %}
             <p>Not recorded</p>
             {% endif %}
@@ -56,7 +60,13 @@
                 <header class="innings-card-heading">
                     <div>
                         <p class="eyebrow section-eyebrow">Innings {{ innings.innings_number }}</p>
-                        <h3>{{ innings.batting_team|default:"Batting team unavailable" }}</h3>
+                        {% if innings.batting_team and innings.batting_team_slug %}
+                        <h3><a class="match-team-profile-link" href="{% url 'cricket_nepal:team_profile' innings.batting_team_slug %}">{{ innings.batting_team }}</a></h3>
+                        {% elif innings.batting_team %}
+                        <h3>{{ innings.batting_team }}</h3>
+                        {% else %}
+                        <h3>Batting team unavailable</h3>
+                        {% endif %}
                     </div>
                     <p class="innings-total">
                         {{ innings.total_runs }}/{{ innings.total_wickets }}

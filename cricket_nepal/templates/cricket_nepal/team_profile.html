@@ -48,6 +48,33 @@
         {% endif %}
     </section>
 
+    <section class="player-stats-section" aria-labelledby="team-players-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Squad</p>
+                <h2 id="team-players-heading">Team players</h2>
+            </div>
+            <span class="player-muted">{{ team.players|length }} players</span>
+        </div>
+        <div class="team-table-scroll">
+        <table class="team-squad-table">
+            <thead><tr><th>Player</th><th>Matches</th><th>Runs</th><th>Wickets</th></tr></thead>
+            <tbody>
+            {% for player in team.players %}
+            <tr>
+                <td><a href="{% url 'cricket_nepal:player_profile' player.player_id %}">{{ player.player_name }}</a></td>
+                <td>{{ player.matches }}</td>
+                <td>{{ player.runs }}</td>
+                <td>{{ player.wickets }}</td>
+            </tr>
+            {% empty %}
+            <tr><td class="player-muted" colspan="4">No players found for this season.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+
     <section class="player-stats-section" aria-labelledby="team-batting-heading">
         <div class="player-section-heading">
             <div>
@@ -160,8 +187,8 @@
             </div>
         </div>
         {% if team.recent_form %}
-        <div class="team-form-indicator" aria-label="Recent form, most recent first">
-            {% for match in team.recent_form %}
+        <div class="team-form-indicator" dir="ltr" aria-label="Recent form, oldest result at the left and most recent at the right">
+            {% for match in team.recent_form reversed %}
             <span class="team-form-result {{ match.result_class }}" title="{{ match.result }} vs {{ match.opponent }} on {{ match.match_date }}">
                 {% if match.result == "Won" %}W{% elif match.result == "Lost" %}L{% elif match.result == "Tied" %}T{% else %}NR{% endif %}
             </span>
@@ -199,7 +226,7 @@
             {% for match in team.matches %}
             <tr>
                 <td><a href="{% url 'cricket_nepal:match_detail' match.match_id %}"><time datetime="{{ match.match_date }}">{{ match.match_date }}</time></a></td>
-                <td>{{ match.opponent }}</td>
+                <td>{% if match.opponent_slug %}<a href="{% url 'cricket_nepal:team_profile' match.opponent_slug %}">{{ match.opponent }}</a>{% else %}{{ match.opponent }}{% endif %}</td>
                 <td><span class="team-result-label {{ match.result_class }}">{{ match.result }}</span></td>
                 <td>{{ match.team_score|default_if_none:"—" }} – {{ match.opponent_score|default_if_none:"—" }}</td>
                 <td>{{ match.venue_name|default_if_none:"—" }}</td>
@@ -215,31 +242,5 @@
         {% endif %}
     </section>
 
-    <section class="player-stats-section" aria-labelledby="team-players-heading">
-        <div class="player-section-heading">
-            <div>
-                <p class="eyebrow section-eyebrow">Squad</p>
-                <h2 id="team-players-heading">Team players</h2>
-            </div>
-            <span class="player-muted">{{ team.players|length }} players</span>
-        </div>
-        <div class="team-table-scroll">
-        <table class="team-squad-table">
-            <thead><tr><th>Player</th><th>Matches</th><th>Runs</th><th>Wickets</th></tr></thead>
-            <tbody>
-            {% for player in team.players %}
-            <tr>
-                <td><a href="{% url 'cricket_nepal:player_profile' player.player_id %}">{{ player.player_name }}</a></td>
-                <td>{{ player.matches }}</td>
-                <td>{{ player.runs }}</td>
-                <td>{{ player.wickets }}</td>
-            </tr>
-            {% empty %}
-            <tr><td class="player-muted" colspan="4">No players found for this season.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </section>
 </section>
 {% endblock %}

@@ -764,6 +764,20 @@ select:focus-visible {
     font-style: italic;
 }
 
+.match-team-profile-link {
+    color: inherit;
+    text-decoration-color: transparent;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.12em;
+    transition: color 140ms ease, text-decoration-color 140ms ease;
+}
+
+.match-team-profile-link:hover,
+.match-team-profile-link:focus-visible {
+    color: var(--green);
+    text-decoration-color: currentColor;
+}
+
 .match-detail-date {
     margin: 12px 0 0;
     color: var(--ink-soft);
@@ -1845,12 +1859,22 @@ select:focus-visible {
     color: var(--navy);
 }
 
-.team-profile-header {
+.team-profile-header,
+.team-directory-header {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 24px;
     margin-bottom: 24px;
+}
+
+.team-directory-header .teams-heading {
+    margin-bottom: 0;
+}
+
+.team-directory-header .player-season-filter {
+    flex: 0 0 auto;
+    margin: 0;
 }
 
 .team-profile-heading {
@@ -1873,6 +1897,28 @@ select:focus-visible {
     padding: 20px;
     border: 1px solid var(--line);
     background: var(--white);
+}
+
+.team-directory-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.team-directory-card-heading .eyebrow {
+    margin: 0;
+}
+
+.team-title-badge {
+    padding: 5px 8px;
+    border: 1px solid #d5c9a8;
+    background: #f7f4eb;
+    color: #806b37;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
 }
 
 .team-directory-card h2 {
@@ -2048,8 +2094,10 @@ select:focus-visible {
 
 .team-form-indicator {
     display: flex;
+    flex-direction: row;
     gap: 7px;
     margin: 16px 0;
+    direction: ltr;
 }
 
 .team-form-result {
@@ -2500,12 +2548,14 @@ select:focus-visible {
     }
 
     .team-profile-header,
+    .team-directory-header,
     .team-performers-grid {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .team-profile-header .player-season-filter {
+    .team-profile-header .player-season-filter,
+    .team-directory-header .player-season-filter {
         flex-wrap: wrap;
     }
 

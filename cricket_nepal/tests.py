@@ -1,3 +1,4 @@
+import re
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -6,7 +7,10 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 from django.urls import reverse
 
-from cricket_nepal.data_access import _npl_points_table
+from cricket_nepal.data_access import (
+    _build_npl_team_directory,
+    _npl_points_table,
+)
 from scripts.import_parquet_to_sqlite import read_source_data, rebuild_database
 
 
@@ -226,6 +230,10 @@ class HomepageTests(SimpleTestCase):
         self.assertEqual(response.context["selected_season"]["season"], "2024/25")
         overview_query.assert_called_once_with(1783)
         self.assertContains(response, "Points table · 2024/25")
+        self.assertContains(
+            response,
+            f'href="{reverse("cricket_nepal:teams")}?season_id=1783"',
+        )
 
     def test_npl_overview_invalid_season_falls_back_to_overall(self):
         with (
@@ -480,9 +488,13 @@ class MatchesPageTests(SimpleTestCase):
             "cricket_nepal.views.get_match_scorecard",
             return_value={
                 **self.sample_match,
+                "team_1_slug": "biratnagar-kings",
+                "team_2_slug": "janakpur-bolts",
+                "winner_slug": "janakpur-bolts",
                 "match_format": "T20",
                 "city": "Kirtipur",
                 "toss_winner_name": "Janakpur Bolts",
+                "toss_winner_slug": "janakpur-bolts",
                 "toss_decision": "field",
                 "tournament_id": 1783,
                 "tournament_name": "Nepal Premier League",
@@ -494,6 +506,7 @@ class MatchesPageTests(SimpleTestCase):
                         "total_wickets": 10,
                         "overs": "19.0.0",
                         "batting_team": "Biratnagar Kings",
+                        "batting_team_slug": "biratnagar-kings",
                         "batting": [
                             {
                                 "player_id": 101,
@@ -559,6 +572,14 @@ class MatchesPageTests(SimpleTestCase):
         self.assertContains(response, "131/2")
         self.assertContains(response, "Biratnagar Kings")
         self.assertContains(response, "Janakpur Bolts")
+        self.assertContains(
+            response,
+            f'href="{reverse("cricket_nepal:team_profile", args=["biratnagar-kings"])}"',
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("cricket_nepal:team_profile", args=["janakpur-bolts"])}"',
+        )
         self.assertContains(response, "First Batter")
         self.assertContains(response, "First Bowler")
         self.assertContains(
@@ -645,6 +666,7 @@ class PlayerDirectoryTests(SimpleTestCase):
 
 
 class TeamDirectoryTests(SimpleTestCase):
+    seasons = HomepageTests.tournaments
     teams = [
         {
             "team_name": "Biratnagar Kings",
@@ -657,31 +679,50 @@ class TeamDirectoryTests(SimpleTestCase):
             "matches_played": 30,
             "wins": 15,
             "losses": 15,
-            "players_with_recorded_appearances": 25,
+            "titles": 0,
+            "win_percentage": 50,
         },
         {
-            "team_name": "Kathmandu Gorkhas",
+            "team_name": "Kathmandu Gurkhas",
             "team_slug": "kathmandu-gorkhas",
-            "seasons": ["2025/26", "2024/25"],
+            "seasons": ["2024/25"],
             "participations": [
-                {"tournament_id": 1998, "season": "2025/26"},
                 {"tournament_id": 1783, "season": "2024/25"},
             ],
-            "matches_played": 30,
-            "wins": 14,
-            "losses": 16,
-            "players_with_recorded_appearances": 24,
+            "matches_played": 7,
+            "wins": 4,
+            "losses": 3,
+            "titles": 0,
+            "win_percentage": 57.1,
         },
     ]
+    overall_directory = {
+        "teams": teams,
+        "seasons": seasons,
+        "selected_season": None,
+    }
 
     def test_directory_shows_team_records_and_profile_links(self):
-        with patch("cricket_nepal.views.get_team_directory", return_value=self.teams):
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.seasons),
+            patch(
+                "cricket_nepal.views.get_npl_team_directory",
+                return_value=self.overall_directory,
+            ),
+        ):
             response = self.client.get(reverse("cricket_nepal:teams"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Explore all eight NPL franchises")
         self.assertContains(response, "Biratnagar Kings")
-        self.assertContains(response, "2025/26 · 2024/25")
-        self.assertContains(response, "Players with appearances")
+        self.assertContains(response, "50.0%")
+        self.assertContains(response, "Overall")
+        primary_nav = (
+            response.content.decode()
+            .split('<nav class="primary-nav" aria-label="Main navigation">', 1)[1]
+            .split("</nav>", 1)[0]
+        )
+        self.assertNotIn(">Teams<", primary_nav)
         self.assertContains(
             response,
             reverse("cricket_nepal:team_profile", args=["biratnagar-kings"]),
@@ -691,6 +732,184 @@ class TeamDirectoryTests(SimpleTestCase):
             reverse("cricket_nepal:team_profile", args=["kathmandu-gorkhas"]),
         )
 
+    def test_directory_season_filter_preserves_historical_name_and_champion(self):
+        selected_season = self.seasons[1]
+        season_directory = {
+            "teams": [self.teams[1]],
+            "seasons": self.seasons,
+            "selected_season": selected_season,
+        }
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.seasons),
+            patch(
+                "cricket_nepal.views.get_npl_team_directory",
+                return_value=season_directory,
+            ) as directory_query,
+        ):
+            response = self.client.get(
+                reverse("cricket_nepal:teams"), {"season_id": "1783"}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        directory_query.assert_called_once_with(1783)
+        self.assertContains(response, "Kathmandu Gurkhas")
+        self.assertContains(response, "2024/25")
+
+    def test_directory_displays_titles_for_overall_and_season_views(self):
+        champions = [
+            {
+                **self.teams[0],
+                "team_name": "Janakpur Bolts",
+                "team_slug": "janakpur-bolts",
+                "titles": 1,
+            },
+            {
+                **self.teams[0],
+                "team_name": "Lumbini Lions",
+                "team_slug": "lumbini-lions",
+                "titles": 1,
+            },
+        ]
+        overall_directory = {
+            "teams": champions,
+            "seasons": self.seasons,
+            "selected_season": None,
+        }
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.seasons),
+            patch(
+                "cricket_nepal.views.get_npl_team_directory",
+                return_value=overall_directory,
+            ),
+        ):
+            response = self.client.get(reverse("cricket_nepal:teams"))
+
+        self.assertContains(response, "1 title")
+
+
+class NplTeamDirectoryDataTests(SimpleTestCase):
+    seasons = HomepageTests.tournaments
+    names_by_season = {
+        1783: [
+            "Biratnagar Kings",
+            "Chitwan Rhinos",
+            "Janakpur Bolts",
+            "Karnali Yaks",
+            "Kathmandu Gurkhas",
+            "Lumbini Lions",
+            "Pokhara Avengers",
+            "Sudur Paschim Royals",
+        ],
+        1998: [
+            "Biratnagar Kings",
+            "Chitwan Rhinos",
+            "Janakpur Bolts",
+            "Karnali Yaks",
+            "Kathmandu Gorkhas",
+            "Lumbini Lions",
+            "Pokhara Avengers",
+            "Sudur Paschim Royals",
+        ],
+    }
+
+    def setUp(self):
+        self.matches = []
+        for season in self.seasons:
+            names = self.names_by_season[season["tournament_id"]]
+            for index in range(0, len(names), 2):
+                self.matches.append(
+                    {
+                        "tournament_id": season["tournament_id"],
+                        "season": season["season"],
+                        "team_1_name": names[index],
+                        "team_2_name": names[index + 1],
+                        "winner_name": names[index],
+                        "stage": "League Stage",
+                    }
+                )
+        self.matches.extend(
+            [
+                {
+                    "tournament_id": 1783,
+                    "season": "2024/25",
+                    "team_1_name": "Janakpur Bolts",
+                    "team_2_name": "Sudur Paschim Royals",
+                    "winner_name": "Janakpur Bolts",
+                    "stage": "Final",
+                },
+                {
+                    "tournament_id": 1998,
+                    "season": "2025/26",
+                    "team_1_name": "Lumbini Lions",
+                    "team_2_name": "Sudur Paschim Royals",
+                    "winner_name": "Lumbini Lions",
+                    "stage": "Final",
+                },
+            ]
+        )
+
+    def test_teams_route_renders_all_eight_franchises(self):
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.seasons),
+            patch(
+                "cricket_nepal.views.get_npl_team_directory",
+                return_value=_build_npl_team_directory(
+                    self.matches, self.seasons
+                ),
+            ),
+        ):
+            response = self.client.get(reverse("cricket_nepal:teams"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["teams"]), 8)
+        for team in response.context["teams"]:
+            self.assertContains(response, team["team_name"])
+            self.assertContains(
+                response,
+                reverse("cricket_nepal:team_profile", args=[team["team_slug"]]),
+            )
+
+    def test_all_franchises_have_profile_links_and_overall_titles(self):
+        directory = _build_npl_team_directory(self.matches, self.seasons)
+        by_name = {team["team_name"]: team for team in directory["teams"]}
+        expected_names = {
+            "Biratnagar Kings",
+            "Chitwan Rhinos",
+            "Janakpur Bolts",
+            "Karnali Yaks",
+            "Kathmandu Gorkhas",
+            "Lumbini Lions",
+            "Pokhara Avengers",
+            "Sudur Paschim Royals",
+        }
+
+        self.assertEqual(set(by_name), expected_names)
+        self.assertEqual(len(directory["teams"]), 8)
+        self.assertEqual(by_name["Janakpur Bolts"]["titles"], 1)
+        self.assertEqual(by_name["Lumbini Lions"]["titles"], 1)
+        self.assertEqual(by_name["Kathmandu Gorkhas"]["titles"], 0)
+        for team in directory["teams"]:
+            self.assertEqual(
+                reverse("cricket_nepal:team_profile", args=[team["team_slug"]]),
+                f"/teams/{team['team_slug']}/",
+            )
+
+    def test_season_data_preserves_kathmandu_names_and_finals(self):
+        older = _build_npl_team_directory(self.matches, self.seasons, 1783)
+        newer = _build_npl_team_directory(self.matches, self.seasons, 1998)
+        older_by_name = {team["team_name"]: team for team in older["teams"]}
+        newer_by_name = {team["team_name"]: team for team in newer["teams"]}
+
+        self.assertEqual(len(older["teams"]), 8)
+        self.assertEqual(len(newer["teams"]), 8)
+        self.assertIn("Kathmandu Gurkhas", older_by_name)
+        self.assertNotIn("Kathmandu Gorkhas", older_by_name)
+        self.assertIn("Kathmandu Gorkhas", newer_by_name)
+        self.assertNotIn("Kathmandu Gurkhas", newer_by_name)
+        self.assertEqual(older["selected_season"]["season"], "2024/25")
+        self.assertEqual(newer["selected_season"]["season"], "2025/26")
+        self.assertEqual(older_by_name["Janakpur Bolts"]["titles"], 1)
+        self.assertEqual(newer_by_name["Lumbini Lions"]["titles"], 1)
 
 class TeamOutcomeAndRankingTests(SimpleTestCase):
     def test_outcome_does_not_count_no_result_as_loss(self):
@@ -761,6 +980,7 @@ class TeamProfileTests(SimpleTestCase):
                 "match_id": "1462596",
                 "match_date": "2024-11-30",
                 "opponent": "Janakpur Bolts",
+                "opponent_slug": "janakpur-bolts",
                 "result": "Won",
                 "team_score": 151,
                 "opponent_score": 143,
@@ -920,9 +1140,18 @@ class TeamProfileTests(SimpleTestCase):
         self.assertEqual(response.context["selected_season"]["season"], "2024/25")
         profile_query.assert_called_once_with("Biratnagar Kings", 1783)
         self.assertContains(response, "2024/25")
+        rendered_profile = response.content.decode()
+        self.assertLess(
+            rendered_profile.index('id="team-players-heading"'),
+            rendered_profile.index('id="team-batting-heading"'),
+        )
         self.assertContains(response, "Team batting performance")
         self.assertContains(response, "Team bowling performance")
         self.assertContains(response, "Match history")
+        self.assertContains(
+            response,
+            f'href="{reverse("cricket_nepal:team_profile", args=["janakpur-bolts"])}"',
+        )
         self.assertContains(response, "Team players")
         self.assertContains(response, "Top performers")
         self.assertContains(response, "Recent form")
@@ -951,6 +1180,86 @@ class TeamProfileTests(SimpleTestCase):
             response,
             reverse("cricket_nepal:match_detail", args=["1462596"]),
         )
+
+    def test_recent_form_indicator_runs_oldest_to_newest_left_to_right(self):
+        profile = {
+            **self.profile,
+            "recent_form": [
+                {
+                    "match_id": "newest",
+                    "match_date": "2025-12-11",
+                    "opponent": "Newest Opponent",
+                    "result": "Lost",
+                    "result_class": "loss",
+                    "recent_summary": "Lost by 5 wickets",
+                },
+                {
+                    "match_id": "second",
+                    "match_date": "2025-12-09",
+                    "opponent": "Second Opponent",
+                    "result": "Lost",
+                    "result_class": "loss",
+                    "recent_summary": "Lost by 77 runs",
+                },
+                {
+                    "match_id": "middle",
+                    "match_date": "2025-12-06",
+                    "opponent": "Middle Opponent",
+                    "result": "Won",
+                    "result_class": "win",
+                    "recent_summary": "Won by 10 runs",
+                },
+                {
+                    "match_id": "fourth",
+                    "match_date": "2025-12-03",
+                    "opponent": "Fourth Opponent",
+                    "result": "Lost",
+                    "result_class": "loss",
+                    "recent_summary": "Lost by 5 wickets",
+                },
+                {
+                    "match_id": "oldest",
+                    "match_date": "2025-11-28",
+                    "opponent": "Oldest Opponent",
+                    "result": "Won",
+                    "result_class": "win",
+                    "recent_summary": "Won by 3 wickets",
+                },
+            ],
+        }
+        with (
+            patch("cricket_nepal.views.get_team_directory", return_value=self.teams),
+            patch("cricket_nepal.views.get_team_profile", return_value=profile),
+        ):
+            response = self.client.get(
+                reverse("cricket_nepal:team_profile", args=["biratnagar-kings"])
+            )
+
+        self.assertEqual(response.status_code, 200)
+        rendered_profile = response.content.decode()
+        indicator_start = rendered_profile.index('class="team-form-indicator"')
+        indicator_end = rendered_profile.index("</div>", indicator_start)
+        indicator = rendered_profile[indicator_start:indicator_end]
+        self.assertIn('dir="ltr"', indicator)
+        self.assertLess(indicator.index("Oldest Opponent"), indicator.index("Fourth Opponent"))
+        self.assertLess(indicator.index("Fourth Opponent"), indicator.index("Middle Opponent"))
+        self.assertLess(indicator.index("Middle Opponent"), indicator.index("Second Opponent"))
+        self.assertLess(indicator.index("Second Opponent"), indicator.index("Newest Opponent"))
+        self.assertEqual(
+            re.findall(
+                r'class="team-form-result [^"]+" title="[^"]+">\s*(\w+)\s*</span>',
+                indicator,
+            ),
+            ["W", "L", "W", "L", "L"],
+        )
+
+        recent_list_start = rendered_profile.index('<ol class="team-recent-list">')
+        recent_list_end = rendered_profile.index("</ol>", recent_list_start)
+        recent_list = rendered_profile[recent_list_start:recent_list_end]
+        self.assertLess(recent_list.index("Newest Opponent"), recent_list.index("Second Opponent"))
+        self.assertLess(recent_list.index("Second Opponent"), recent_list.index("Middle Opponent"))
+        self.assertLess(recent_list.index("Middle Opponent"), recent_list.index("Fourth Opponent"))
+        self.assertLess(recent_list.index("Fourth Opponent"), recent_list.index("Oldest Opponent"))
 
     def test_profile_defaults_to_overall_and_shows_both_season_options(self):
         with (

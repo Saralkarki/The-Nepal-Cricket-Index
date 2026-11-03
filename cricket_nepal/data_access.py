@@ -970,6 +970,110 @@ def get_team_directory() -> list[dict[str, Any]]:
     return sorted(teams_by_name.values(), key=lambda team: team["team_name"])
 
 
+def _build_npl_team_directory(
+    matches: list[dict[str, Any]],
+    seasons: list[dict[str, Any]],
+    tournament_id: int | None = None,
+) -> dict[str, Any]:
+    if tournament_id is not None:
+        matches = [
+            match for match in matches if match["tournament_id"] == tournament_id
+        ]
+
+    teams_by_key: dict[tuple[str, int | None], dict[str, Any]] = {}
+    for match in matches:
+        for raw_name in {match["team_1_name"], match["team_2_name"]}:
+            franchise_name = _canonical_team_name(raw_name)
+            key = (
+                franchise_name,
+                match["tournament_id"] if tournament_id is not None else None,
+            )
+            card = teams_by_key.setdefault(
+                key,
+                {
+                    "team_name": (
+                        raw_name if tournament_id is not None else franchise_name
+                    ),
+                    "team_slug": slugify(franchise_name),
+                    "franchise_name": franchise_name,
+                    "matches_played": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "titles": 0,
+                },
+            )
+            card["matches_played"] += 1
+            if match["winner_name"] in _team_name_aliases(franchise_name):
+                card["wins"] += 1
+            elif match["winner_name"] is not None:
+                card["losses"] += 1
+
+            if (
+                match["stage"]
+                and match["stage"].strip().casefold() == "final"
+                and match["winner_name"] in _team_name_aliases(franchise_name)
+            ):
+                card["titles"] += 1
+
+    for card in teams_by_key.values():
+        decisions = card["wins"] + card["losses"]
+        card["win_percentage"] = (
+            card["wins"] * 100 / decisions if decisions else None
+        )
+
+    return {
+        "teams": sorted(
+            teams_by_key.values(),
+            key=lambda card: card["franchise_name"],
+        ),
+        "seasons": seasons,
+        "selected_season": next(
+            (
+                season
+                for season in seasons
+                if season["tournament_id"] == tournament_id
+            ),
+            None,
+        ),
+    }
+
+
+def get_npl_team_directory(
+    tournament_id: int | None = None,
+) -> dict[str, Any]:
+    seasons = [
+        tournament
+        for tournament in get_tournaments()
+        if tournament["tournament_name"] == "Nepal Premier League"
+    ]
+    tournament_ids = [season["tournament_id"] for season in seasons]
+    if tournament_id is not None and tournament_id not in tournament_ids:
+        raise ValueError(f"Unknown NPL tournament id: {tournament_id}")
+
+    if not tournament_ids:
+        return {"teams": [], "seasons": [], "selected_season": None}
+
+    selected_ids = (
+        [tournament_id] if tournament_id is not None else tournament_ids
+    )
+    placeholders = ", ".join(["%s"] * len(selected_ids))
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT m.match_id, m.tournament_id, t.season,
+                   m.team_1_name, m.team_2_name, m.winner_name, m.stage
+            FROM matches AS m
+            JOIN tournaments AS t ON t.tournament_id = m.tournament_id
+            WHERE m.tournament_id IN ({placeholders})
+            ORDER BY t.season DESC, m.match_date, m.match_id
+            """,
+            selected_ids,
+        )
+        matches = _rows_as_dicts(cursor)
+
+    return _build_npl_team_directory(matches, seasons, tournament_id)
+
+
 def get_team_profile(
     team_name: str, tournament_id: int | None = None
 ) -> dict[str, Any] | None:
@@ -1033,6 +1137,7 @@ def get_team_profile(
                 else match["team_1_name"]
             )
             match["opponent"] = raw_opponent
+            match["opponent_slug"] = slugify(_canonical_team_name(raw_opponent))
             match["result"], match["result_class"] = _team_match_outcome(
                 match, aliases
             )
@@ -1341,7 +1446,11 @@ def get_team_profile(
     bowling_economy_qualifiers = [
         row for row in bowling_leader_rows if row["legal_balls"] >= 72
     ]
-    recent_form = matches[:5]
+    recent_form = sorted(
+        matches,
+        key=lambda match: (match["match_date"], match["match_id"]),
+        reverse=True,
+    )[:5]
     for match in recent_form:
         if match["winning_margin"]:
             match["recent_summary"] = (
@@ -1461,6 +1570,18 @@ def get_match_scorecard(match_id: str) -> dict[str, Any] | None:
             return None
 
         match = matches[0]
+        match["team_1_slug"] = slugify(_canonical_team_name(match["team_1_name"]))
+        match["team_2_slug"] = slugify(_canonical_team_name(match["team_2_name"]))
+        match["winner_slug"] = (
+            slugify(_canonical_team_name(match["winner_name"]))
+            if match["winner_name"]
+            else None
+        )
+        match["toss_winner_slug"] = (
+            slugify(_canonical_team_name(match["toss_winner_name"]))
+            if match["toss_winner_name"]
+            else None
+        )
         cursor.execute(
             """
             SELECT innings_number, total_runs, total_wickets, legal_balls, overs,
@@ -1475,6 +1596,11 @@ def get_match_scorecard(match_id: str) -> dict[str, Any] | None:
         innings_by_number = {row["innings_number"]: row for row in innings}
 
         for innings_row in innings:
+            innings_row["batting_team_slug"] = (
+                slugify(_canonical_team_name(innings_row["batting_team"]))
+                if innings_row["batting_team"]
+                else None
+            )
             innings_row["batting"] = []
             innings_row["bowling"] = []
 

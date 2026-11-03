@@ -30,7 +30,11 @@
         {% else %}
         <a href="{% url 'cricket_nepal:matches' %}">NPL matches <span aria-hidden="true">→</span></a>
         {% endif %}
+        {% if selected_season %}
+        <a href="{% url 'cricket_nepal:teams' %}?season_id={{ selected_season.tournament_id }}">NPL teams <span aria-hidden="true">→</span></a>
+        {% else %}
         <a href="{% url 'cricket_nepal:teams' %}">NPL teams <span aria-hidden="true">→</span></a>
+        {% endif %}
         <a href="{% url 'cricket_nepal:players' %}">Player profiles <span aria-hidden="true">→</span></a>
     </nav>
 

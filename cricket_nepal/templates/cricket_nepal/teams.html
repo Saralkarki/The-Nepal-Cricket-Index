@@ -4,23 +4,50 @@
 
 {% block content %}
 <section class="page-section teams-page">
-    <header class="teams-heading">
-        <p class="eyebrow section-eyebrow">Nepal Premier League</p>
-        <h1>Teams</h1>
-        <p class="section-intro">Franchise records across the tournaments represented in the database.</p>
+    <a class="match-back-link" href="{% url 'cricket_nepal:tournament_overview' 'nepal-premier-league' %}{% if selected_season %}?season_id={{ selected_season.tournament_id }}{% endif %}">← Nepal Premier League</a>
+
+    <header class="team-directory-header">
+        <div class="teams-heading">
+            <p class="eyebrow section-eyebrow">Nepal Premier League</p>
+            <h1>Teams</h1>
+            <p class="section-intro">
+                {% if selected_season %}Franchise records for {{ selected_season.season }}.{% else %}Explore all eight NPL franchises across both seasons.{% endif %}
+            </p>
+        </div>
+        <form class="player-season-filter" method="get" aria-label="Filter teams by season">
+            <label for="teams-season-filter">Season</label>
+            <select id="teams-season-filter" name="season_id">
+                <option value="">Overall</option>
+                {% for season in seasons %}
+                <option value="{{ season.tournament_id }}"{% if selected_season.tournament_id == season.tournament_id %} selected{% endif %}>{{ season.season }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+        </form>
     </header>
 
     <div class="team-directory-grid">
         {% for team in teams %}
         <article class="team-directory-card">
-            <p class="eyebrow section-eyebrow">Franchise</p>
+            <div class="team-directory-card-heading">
+                <p class="eyebrow section-eyebrow">NPL franchise</p>
+                {% if selected_season and team.titles %}
+                <span class="team-title-badge">Champion</span>
+                {% elif not selected_season and team.titles %}
+                <span class="team-title-badge">{{ team.titles }} {% if team.titles == 1 %}title{% else %}titles{% endif %}</span>
+                {% endif %}
+            </div>
             <h2><a href="{% url 'cricket_nepal:team_profile' team.team_slug %}">{{ team.team_name }}</a></h2>
-            <p class="team-seasons">{{ team.seasons|join:" · " }}</p>
+            {% if selected_season %}
+            <p class="team-seasons">{{ selected_season.season }}</p>
+            {% else %}
+            <p class="team-seasons">Across both seasons</p>
+            {% endif %}
             <dl class="team-directory-stats">
                 <div><dt>Matches</dt><dd>{{ team.matches_played }}</dd></div>
                 <div><dt>Wins</dt><dd>{{ team.wins }}</dd></div>
                 <div><dt>Losses</dt><dd>{{ team.losses }}</dd></div>
-                <div><dt>Players with appearances</dt><dd>{{ team.players_with_recorded_appearances }}</dd></div>
+                <div><dt>Win percentage</dt><dd>{% if team.win_percentage is not None %}{{ team.win_percentage|floatformat:1 }}%{% else %}—{% endif %}</dd></div>
             </dl>
             <a class="team-card-link" href="{% url 'cricket_nepal:team_profile' team.team_slug %}">View team profile <span aria-hidden="true">→</span></a>
         </article>
@@ -28,5 +55,6 @@
         <p class="player-empty-state">No teams are available.</p>
         {% endfor %}
     </div>
+    <p class="team-qualification-note">Win percentage is based on matches with a recorded winner; ties and no-results are excluded.</p>
 </section>
 {% endblock %}

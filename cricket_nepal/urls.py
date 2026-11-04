@@ -13,8 +13,18 @@ urlpatterns = [
         views.tournament_overview,
         name="tournament_overview",
     ),
+    path(
+        "nepal-tournaments/<int:tournament_id>/",
+        views.nepal_tournament_overview,
+        name="nepal_tournament_overview",
+    ),
     path("npl-matches/", views.matches, name="npl_matches"),
     path("matches/<str:match_id>/", views.match_detail, name="match_detail"),
+    path(
+        "nepal-matches/<str:match_id>/",
+        views.nepal_match_detail,
+        name="nepal_match_detail",
+    ),
     path("teams/", views.teams, name="teams"),
     path("teams/<slug:team_slug>/", views.team_profile, name="team_profile"),
     path("npl-players/", views.players, name="players"),
@@ -22,6 +32,11 @@ urlpatterns = [
         "nepal-national-team/",
         views.national_team_players,
         name="national_team_players",
+    ),
+    path(
+        "nepal-national-team/players/<int:nepal_player_id>/",
+        views.national_team_player_profile,
+        name="national_team_player_profile",
     ),
     path("player-statistics/", views.player_statistics, name="player_statistics"),
     path(

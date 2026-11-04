@@ -20,6 +20,15 @@ from cricket_nepal.data_access import (
     get_npl_tournament_overview,
     get_tournaments,
 )
+from cricket_nepal.nepal_data_access import (
+    LEAGUE_2_CYCLES,
+    get_nepal_match_scorecard,
+    get_nepal_player_directory,
+    get_nepal_player_profile,
+    get_nepal_tournament_overview,
+    get_nepal_tournaments,
+)
+from cricket_nepal.tournament_data_access import get_tournament_match_formats
 
 
 BATTER_RADAR_AXES = (
@@ -134,26 +143,258 @@ def about(request):
     return render(request, "cricket_nepal/about.html")
 
 
-def _tournament_directory():
+def _tournament_directory(include_nepal=False):
     tournaments_by_name = {}
-    for tournament in get_tournaments():
-        entry = tournaments_by_name.setdefault(
-            tournament["tournament_name"],
-            {
-                "tournament_name": tournament["tournament_name"],
-                "tournament_slug": slugify(tournament["tournament_name"]),
-                "seasons": [],
-            },
+    tournament_sources = [(get_tournaments(), "NPL", "male", True)]
+    if include_nepal:
+        tournament_sources.append(
+            (get_nepal_tournaments(), "Nepal national team", None, False)
         )
-        entry["seasons"].append(tournament["season"])
+
+    formats_by_tournament = {}
+    if include_nepal:
+        for match_format in get_tournament_match_formats():
+            key = (
+                match_format["source"],
+                match_format["tournament_name"],
+                match_format["season"],
+                (
+                    "male"
+                    if match_format["source"] == "NPL"
+                    else (match_format["gender"] or "").casefold()
+                ),
+            )
+            formats_by_tournament.setdefault(key, set()).add(
+                match_format["match_format"]
+            )
+
+    for (
+        source_tournaments,
+        source_name,
+        default_gender,
+        has_overview,
+    ) in tournament_sources:
+        for tournament in source_tournaments:
+            tournament_name = tournament["tournament_name"]
+            entry = tournaments_by_name.setdefault(
+                tournament_name,
+                {
+                    "tournament_name": tournament_name,
+                    "tournament_slug": slugify(tournament_name),
+                    "seasons": [],
+                    "sources": [],
+                    "has_overview": False,
+                    "records": [],
+                },
+            )
+            season = tournament.get("season")
+            if season and season not in entry["seasons"]:
+                entry["seasons"].append(season)
+            entry["records"].append(
+                {
+                    "gender": (
+                        tournament.get("gender") or default_gender or ""
+                    ).casefold(),
+                    "season": season,
+                    "tournament_id": tournament.get("tournament_id"),
+                    "source": source_name,
+                    "has_overview": has_overview,
+                    "match_formats": formats_by_tournament.get(
+                        (
+                            source_name,
+                            tournament_name,
+                            season,
+                            (
+                                "male"
+                                if source_name == "NPL"
+                                else (
+                                    tournament.get("gender") or ""
+                                ).casefold()
+                            ),
+                        ),
+                        set(),
+                    ),
+                }
+            )
     return list(tournaments_by_name.values())
 
 
 def tournaments(request):
+    all_tournaments = _tournament_directory(include_nepal=True)
+    all_formats = {
+        match_format.strip().upper()
+        for tournament in all_tournaments
+        for record in tournament["records"]
+        for match_format in record["match_formats"]
+        if match_format and match_format.strip()
+    }
+    known_match_types = ("ODI", "T20", "T20I")
+    available_match_types = [
+        match_type for match_type in known_match_types if match_type in all_formats
+    ]
+    if any(match_format not in known_match_types for match_format in all_formats):
+        available_match_types.append("Others")
+
+    season_options = sorted(
+        {
+            record["season"]
+            for tournament in all_tournaments
+            for record in tournament["records"]
+            if record["season"]
+        },
+        reverse=True,
+    )
+    selected_gender = request.GET.get("gender", "all")
+    if selected_gender not in {"all", "men", "women"}:
+        selected_gender = "all"
+    selected_season = request.GET.get("season", "all")
+    if selected_season not in season_options and selected_season != "all":
+        selected_season = "all"
+    selected_match_type = request.GET.get("match_type", "all")
+    match_type_values = {
+        "odi": "ODI",
+        "t20": "T20",
+        "t20i": "T20I",
+        "others": "Others",
+    }
+    if (
+        selected_match_type != "all"
+        and match_type_values.get(selected_match_type) not in available_match_types
+    ):
+        selected_match_type = "all"
+
+    gender_values = {"men": "male", "women": "female"}
+    tournament_list = []
+    for tournament in all_tournaments:
+        matching_records = [
+            record
+            for record in tournament["records"]
+            if record["match_formats"]
+            and (
+                selected_gender == "all"
+                or record["gender"] == gender_values[selected_gender]
+            )
+            and (
+                selected_season == "all"
+                or record["season"] == selected_season
+            )
+            and (
+                selected_match_type == "all"
+                or (
+                    any(
+                        match_format.strip().upper() not in known_match_types
+                        for match_format in record["match_formats"]
+                        if match_format
+                    )
+                    if selected_match_type == "others"
+                    else match_type_values[selected_match_type]
+                    in {
+                        match_format.strip().upper()
+                        for match_format in record["match_formats"]
+                        if match_format
+                    }
+                )
+            )
+        ]
+        if not matching_records:
+            continue
+        nepal_instances = []
+        seen_nepal_ids = set()
+        for record in matching_records:
+            tournament_id = record["tournament_id"]
+            if (
+                record["source"] == "Nepal national team"
+                and tournament_id is not None
+                and tournament_id not in seen_nepal_ids
+            ):
+                seen_nepal_ids.add(tournament_id)
+                nepal_instances.append(
+                    {"tournament_id": tournament_id, "season": record["season"]}
+                )
+        tournament_list.append(
+            {
+                **tournament,
+                "seasons": list(
+                    dict.fromkeys(
+                        record["season"]
+                        for record in matching_records
+                        if record["season"]
+                    )
+                ),
+                "sources": list(
+                    dict.fromkeys(record["source"] for record in matching_records)
+                ),
+                "has_overview": any(
+                    record["has_overview"] for record in matching_records
+                ),
+                "match_formats": sorted(
+                    {
+                        match_format
+                        for record in matching_records
+                        for match_format in record["match_formats"]
+                    }
+                ),
+                "nepal_instances": nepal_instances,
+            }
+        )
+
     return render(
         request,
         "cricket_nepal/tournaments.html",
-        {"tournaments": _tournament_directory()},
+        {
+            "tournaments": tournament_list,
+            "season_options": season_options,
+            "selected_gender": selected_gender,
+            "selected_season": selected_season,
+            "match_type_options": available_match_types,
+            "selected_match_type": selected_match_type,
+        },
+    )
+
+
+def nepal_tournament_overview(request, tournament_id: int):
+    cycle_for_tournament = next(
+        (
+            cycle
+            for cycle, ids in LEAGUE_2_CYCLES.items()
+            if tournament_id in ids
+        ),
+        None,
+    )
+    selected_cycle = cycle_for_tournament
+    cycle_tournament_ids = (
+        LEAGUE_2_CYCLES[cycle_for_tournament]
+        if cycle_for_tournament
+        else (tournament_id,)
+    )
+
+    requested_cycle = request.GET.get("cycle")
+    if cycle_for_tournament and requested_cycle in LEAGUE_2_CYCLES:
+        selected_cycle = requested_cycle
+        cycle_tournament_ids = LEAGUE_2_CYCLES[requested_cycle]
+
+    overview = get_nepal_tournament_overview(cycle_tournament_ids)
+    if overview is None:
+        raise Http404("Tournament not found")
+
+    cycle_options = [
+        {"value": cycle, "label": cycle.replace("-", "–")}
+        for cycle in LEAGUE_2_CYCLES
+    ]
+    selected_cycle_label = (
+        selected_cycle.replace("-", "–") if selected_cycle else None
+    )
+    return render(
+        request,
+        "cricket_nepal/nepal_tournament_overview.html",
+        {
+            "overview": overview,
+            "tournament_id": tournament_id,
+            "is_league_2": cycle_for_tournament is not None,
+            "cycle_options": cycle_options,
+            "selected_cycle": selected_cycle,
+            "selected_cycle_label": selected_cycle_label,
+        },
     )
 
 
@@ -224,7 +465,35 @@ def players(request):
 
 
 def national_team_players(request):
-    return render(request, "cricket_nepal/national_team_players.html")
+    search_term = request.GET.get("q", "").strip()[:100]
+    selected_gender = request.GET.get("gender", "all")
+    if selected_gender not in {"all", "male", "female"}:
+        selected_gender = "all"
+    players = get_nepal_player_directory(
+        search_term,
+        gender=None if selected_gender == "all" else selected_gender,
+    )
+    return render(
+        request,
+        "cricket_nepal/national_team_players.html",
+        {
+            "players": players,
+            "search_term": search_term,
+            "selected_gender": selected_gender,
+            "player_count": len(players),
+        },
+    )
+
+
+def national_team_player_profile(request, nepal_player_id: int):
+    profile = get_nepal_player_profile(nepal_player_id)
+    if profile is None:
+        raise Http404("National-team player not found")
+    return render(
+        request,
+        "cricket_nepal/nepal_player_profile.html",
+        {"profile": profile},
+    )
 
 
 def player_statistics(request, statistics_view="batting"):
@@ -528,3 +797,10 @@ def match_detail(request, match_id: str):
     if match is None:
         raise Http404("Match not found")
     return render(request, "cricket_nepal/match_detail.html", {"match": match})
+
+
+def nepal_match_detail(request, match_id: str):
+    match = get_nepal_match_scorecard(match_id)
+    if match is None:
+        raise Http404("Match not found")
+    return render(request, "cricket_nepal/nepal_match_detail.html", {"match": match})

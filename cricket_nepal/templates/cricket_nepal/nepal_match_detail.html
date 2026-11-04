@@ -1,0 +1,95 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}{{ match.team_1_name }} v {{ match.team_2_name }} · Nepal Cricket Dashboard{% endblock %}
+
+{% block content %}
+<section class="page-section match-detail-page">
+    <a class="match-back-link" href="{% url 'cricket_nepal:nepal_tournament_overview' match.tournament_id %}">
+        <span aria-hidden="true">←</span> Back to {{ match.tournament_name }}
+    </a>
+
+    <div class="match-detail-heading">
+        <p class="eyebrow section-eyebrow">{{ match.tournament_name }}{% if match.season %} · {{ match.season }}{% endif %}</p>
+        <h1>{{ match.team_1_name }} <span>v</span> {{ match.team_2_name }}</h1>
+        <p class="match-detail-date">{{ match.match_date }} · {{ match.match_format }}</p>
+    </div>
+
+    <div class="match-detail-summary">
+        <div>
+            <p class="match-date-label">Result</p>
+            <p class="match-detail-result">{{ match.result }}</p>
+        </div>
+        <div>
+            <p class="match-date-label">Venue</p>
+            <p>{{ match.venue_name|default:"Venue unavailable" }}{% if match.city %}, {{ match.city }}{% endif %}</p>
+        </div>
+        <div>
+            <p class="match-date-label">Gender</p>
+            <p>{{ match.gender|default:"Unavailable"|title }}</p>
+        </div>
+    </div>
+
+    <section class="innings-section" aria-labelledby="nepal-innings-heading">
+        <div class="innings-section-heading">
+            <p class="eyebrow section-eyebrow">Match scorecard</p>
+            <h2 id="nepal-innings-heading">Innings summary</h2>
+        </div>
+        {% if match.innings %}
+        {% for innings in match.innings %}
+        <article class="innings-card">
+            <header class="innings-card-heading">
+                <div>
+                    <p class="eyebrow section-eyebrow">Innings {{ innings.innings_number }}</p>
+                    <h3>{{ innings.batting_team|default:"Batting team unavailable" }}</h3>
+                </div>
+                <p class="innings-total">
+                    {{ innings.total_runs|default_if_none:"—"|floatformat:0 }}/{{ innings.total_wickets|default_if_none:"—"|floatformat:0 }}
+                    <span>{{ innings.overs|default:"Overs unavailable" }} overs</span>
+                </p>
+            </header>
+            <div class="innings-detail">
+                <section class="scorecard-section" aria-labelledby="nepal-batting-{{ innings.innings_number }}">
+                    <h4 id="nepal-batting-{{ innings.innings_number }}">Batting</h4>
+                    {% if innings.batting %}
+                    <div class="scorecard-table-wrap">
+                        <table class="scorecard-table">
+                            <thead><tr><th>Batter</th><th>Dismissal</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead>
+                            <tbody>
+                                {% for batter in innings.batting %}
+                                <tr>
+                                    <th scope="row">{{ batter.batsman }}</th>
+                                    <td class="dismissal-cell">{{ batter.dismissal_type|default:"Not out" }}{% if batter.dismissed_by_bowler %} · b {{ batter.dismissed_by_bowler }}{% endif %}{% if batter.dismissed_by_fielder %} · {{ batter.dismissed_by_fielder }}{% endif %}</td>
+                                    <td>{{ batter.runs|floatformat:0 }}</td><td>{{ batter.balls_faced }}</td><td>{{ batter.fours }}</td><td>{{ batter.sixes }}</td><td>{{ batter.strike_rate|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}<p class="player-empty-state">Batting scorecard unavailable.</p>{% endif %}
+                </section>
+                <section class="scorecard-section" aria-labelledby="nepal-bowling-{{ innings.innings_number }}">
+                    <h4 id="nepal-bowling-{{ innings.innings_number }}">Bowling</h4>
+                    {% if innings.bowling %}
+                    <div class="scorecard-table-wrap">
+                        <table class="scorecard-table">
+                            <thead><tr><th>Bowler</th><th>Overs</th><th>Runs</th><th>Wickets</th><th>Economy</th></tr></thead>
+                            <tbody>
+                                {% for bowler in innings.bowling %}
+                                <tr>
+                                    <th scope="row">{{ bowler.bowler }}</th><td>{{ bowler.overs_bowled }}</td><td>{{ bowler.runs_conceded|floatformat:0 }}</td><td>{{ bowler.wickets|floatformat:0 }}</td><td>{{ bowler.economy|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}<p class="player-empty-state">Bowling scorecard unavailable.</p>{% endif %}
+                </section>
+            </div>
+        </article>
+        {% endfor %}
+        {% else %}
+        <p class="player-empty-state">No innings scorecards are available for this match.</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

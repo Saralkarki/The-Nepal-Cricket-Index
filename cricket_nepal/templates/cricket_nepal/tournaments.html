@@ -7,18 +7,71 @@
     <header class="player-page-heading">
         <p class="eyebrow section-eyebrow">Nepal Cricket Dataset</p>
         <h1>Tournaments</h1>
-        <p class="section-intro">Browse competitions represented in the dataset. More Nepal cricket tournaments can be added here as their data becomes available.</p>
+        <p class="section-intro">Browse competitions from the Nepal Premier League and Nepal national-team datasets.</p>
     </header>
+
+    <form method="get" class="match-filters tournament-filters">
+        <div class="filter-field">
+            <label for="tournament-gender">Gender</label>
+            <select id="tournament-gender" name="gender" onchange="this.form.submit()">
+                <option value="all"{% if selected_gender == "all" %} selected{% endif %}>All</option>
+                <option value="men"{% if selected_gender == "men" %} selected{% endif %}>Men</option>
+                <option value="women"{% if selected_gender == "women" %} selected{% endif %}>Women</option>
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="tournament-season">Year or season</label>
+            <select id="tournament-season" name="season" onchange="this.form.submit()">
+                <option value="all"{% if selected_season == "all" %} selected{% endif %}>All years</option>
+                {% for season in season_options %}
+                <option value="{{ season }}"{% if selected_season == season %} selected{% endif %}>{{ season }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="tournament-match-type">Match type</label>
+            <select id="tournament-match-type" name="match_type" onchange="this.form.submit()">
+                <option value="all"{% if selected_match_type == "all" %} selected{% endif %}>All match types</option>
+                {% for match_type in match_type_options %}
+                <option value="{{ match_type|lower }}"{% if selected_match_type == match_type|lower %} selected{% endif %}>{{ match_type }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
 
     <div class="dataset-tournament-list">
         {% for tournament in tournaments %}
         <article class="dataset-tournament-card">
             <div>
-                <p class="eyebrow section-eyebrow">Available competition</p>
-                <h2><a href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">{{ tournament.tournament_name }}</a></h2>
+                <p class="eyebrow section-eyebrow">{{ tournament.sources|join:" · " }}</p>
+                <h2>
+                    {% if tournament.has_overview %}
+                    <a href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">{{ tournament.tournament_name }}</a>
+                    {% elif tournament.nepal_instances %}
+                    <a href="{% url 'cricket_nepal:nepal_tournament_overview' tournament.nepal_instances.0.tournament_id %}">{{ tournament.tournament_name }}</a>
+                    {% else %}
+                    {{ tournament.tournament_name }}
+                    {% endif %}
+                </h2>
+                {% if tournament.has_overview %}
                 <p class="team-seasons">Seasons {{ tournament.seasons|join:" · " }}</p>
+                {% endif %}
+                {% if tournament.nepal_instances %}
+                <p class="team-seasons">
+                    National-team instances:
+                    {% for instance in tournament.nepal_instances %}
+                    <a href="{% url 'cricket_nepal:nepal_tournament_overview' instance.tournament_id %}">{{ instance.season|default:"View overview" }}</a>{% if not forloop.last %} · {% endif %}
+                    {% endfor %}
+                </p>
+                {% elif not tournament.has_overview %}
+                <p class="team-seasons">Seasons {{ tournament.seasons|join:" · " }}</p>
+                {% endif %}
             </div>
+            {% if tournament.has_overview %}
             <a class="team-card-link" href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">View overview <span aria-hidden="true">→</span></a>
+            {% elif tournament.nepal_instances %}
+            <a class="team-card-link" href="{% url 'cricket_nepal:nepal_tournament_overview' tournament.nepal_instances.0.tournament_id %}">View overview <span aria-hidden="true">→</span></a>
+            {% endif %}
         </article>
         {% empty %}
         <p class="player-empty-state">No tournament data is available yet.</p>

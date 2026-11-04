@@ -7,8 +7,56 @@
     <header class="player-page-heading">
         <p class="eyebrow section-eyebrow">Nepal Cricket</p>
         <h1>Nepal National Team</h1>
-        <p class="section-intro">National team player profiles and statistics will be added when the data becomes available.</p>
+        <p class="section-intro">Explore Nepal national-team players, tournament participation and format-specific statistics.</p>
     </header>
-    <p class="player-empty-state">No Nepal national team player data is available yet.</p>
+
+    <form class="player-search" method="get" action="{% url 'cricket_nepal:national_team_players' %}">
+        <label for="national-player-search">Search by player name</label>
+        <div class="player-search-controls">
+            <input id="national-player-search" type="search" name="q" value="{{ search_term }}" placeholder="Enter a player name">
+            <div class="player-search-gender">
+                <label for="national-player-gender">Gender</label>
+                <select id="national-player-gender" name="gender">
+                    <option value="all"{% if selected_gender == "all" %} selected{% endif %}>All</option>
+                    <option value="male"{% if selected_gender == "male" %} selected{% endif %}>Male</option>
+                    <option value="female"{% if selected_gender == "female" %} selected{% endif %}>Female</option>
+                </select>
+            </div>
+            <button type="submit">Search</button>
+            {% if search_term or selected_gender != "all" %}
+            <a href="{% url 'cricket_nepal:national_team_players' %}">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="player-directory-heading">
+        <h2>{% if search_term %}Search results{% else %}All players{% endif %}</h2>
+        <span>{{ player_count }} player{{ player_count|pluralize }}</span>
+    </div>
+
+    {% if players %}
+    <div class="player-directory-list">
+        {% for player in players %}
+        <article class="player-directory-row">
+            <div>
+                <h3><a href="{% url 'cricket_nepal:national_team_player_profile' player.nepal_player_id %}">{{ player.player_name }}</a></h3>
+                <p class="player-muted">{{ player.gender|title }}</p>
+                {% if player.participations %}
+                <ul class="player-participation-list">
+                    {% for participation in player.participations %}
+                    <li>{{ participation.tournament_name }}{% if participation.season %} · {{ participation.season }}{% endif %}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="player-muted">No tournament participation recorded.</p>
+                {% endif %}
+            </div>
+            <a class="player-open-link" href="{% url 'cricket_nepal:national_team_player_profile' player.nepal_player_id %}" aria-label="View {{ player.player_name }} profile">View profile <span aria-hidden="true">→</span></a>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="player-empty-state">No players match “{{ search_term }}”.</p>
+    {% endif %}
 </section>
 {% endblock %}

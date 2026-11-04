@@ -168,10 +168,39 @@ class HomepageTests(SimpleTestCase):
         self.assertNotContains(response, "Leading run scorer")
 
     def test_tournament_directory_links_to_npl_overview(self):
-        with patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments):
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch("cricket_nepal.views.get_nepal_tournaments", return_value=[]),
+            patch(
+                "cricket_nepal.views.get_tournament_match_formats",
+                return_value=[
+                    {
+                        "source": "NPL",
+                        "tournament_name": "Nepal Premier League",
+                        "season": "2025/26",
+                        "gender": "male",
+                        "match_format": "T20",
+                    },
+                    {
+                        "source": "NPL",
+                        "tournament_name": "Nepal Premier League",
+                        "season": "2024/25",
+                        "gender": "male",
+                        "match_format": "T20",
+                    },
+                ],
+            ),
+        ):
             response = self.client.get(reverse("cricket_nepal:tournaments"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_gender"], "all")
+        self.assertEqual(response.context["selected_season"], "all")
+        self.assertContains(response, 'name="gender"')
+        self.assertContains(response, 'name="season"')
+        self.assertContains(response, 'onchange="this.form.submit()"')
+        self.assertContains(response, '<option value="2025/26"')
+        self.assertContains(response, '<option value="2024/25"')
         self.assertContains(
             response,
             reverse(
@@ -180,6 +209,460 @@ class HomepageTests(SimpleTestCase):
             ),
         )
         self.assertContains(response, "Seasons 2025/26 · 2024/25")
+
+    def test_tournament_directory_combines_sources_without_duplicate_competitions(self):
+        nepal_tournaments = [
+            {
+                "tournament_id": 2177,
+                "tournament_name": "ICC Men's Cricket World Cup League 2",
+                "season": "2026/27",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 2087,
+                "tournament_name": "ICC Men's Cricket World Cup League 2",
+                "season": "2026",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 3000,
+                "tournament_name": "Nepal Premier League",
+                "season": "2027",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 3001,
+                "tournament_name": "Women's Invitational",
+                "season": "2026",
+                "gender": "female",
+            },
+        ]
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch(
+                "cricket_nepal.views.get_nepal_tournaments",
+                return_value=nepal_tournaments,
+            ) as nepal_query,
+            patch(
+                "cricket_nepal.views.get_tournament_match_formats",
+                return_value=[
+                    {
+                        "source": source,
+                        "tournament_name": name,
+                        "season": season,
+                        "gender": gender,
+                        "match_format": match_format,
+                    }
+                    for source, name, season, gender, match_format in [
+                        ("NPL", "Nepal Premier League", "2025/26", "male", "T20"),
+                        ("NPL", "Nepal Premier League", "2024/25", "male", "T20"),
+                        (
+                            "Nepal national team",
+                            "ICC Men's Cricket World Cup League 2",
+                            "2026/27",
+                            "male",
+                            "ODI",
+                        ),
+                        (
+                            "Nepal national team",
+                            "ICC Men's Cricket World Cup League 2",
+                            "2026",
+                            "male",
+                            "ODI",
+                        ),
+                        (
+                            "Nepal national team",
+                            "Nepal Premier League",
+                            "2027",
+                            "male",
+                            "T20",
+                        ),
+                        (
+                            "Nepal national team",
+                            "Women's Invitational",
+                            "2026",
+                            "female",
+                            "T20I",
+                        ),
+                    ]
+                ],
+            ),
+        ):
+            response = self.client.get(reverse("cricket_nepal:tournaments"))
+
+        self.assertEqual(response.status_code, 200)
+        nepal_query.assert_called_once_with()
+        competitions = response.context["tournaments"]
+        self.assertEqual(
+            [row["tournament_name"] for row in competitions],
+            [
+                "Nepal Premier League",
+                "ICC Men's Cricket World Cup League 2",
+                "Women's Invitational",
+            ],
+        )
+        self.assertEqual(
+            competitions[0]["seasons"], ["2025/26", "2024/25", "2027"]
+        )
+        self.assertEqual(competitions[0]["sources"], ["NPL", "Nepal national team"])
+        self.assertTrue(competitions[0]["has_overview"])
+        self.assertEqual(competitions[1]["seasons"], ["2026/27", "2026"])
+        self.assertFalse(competitions[1]["has_overview"])
+        self.assertEqual(competitions[2]["seasons"], ["2026"])
+        self.assertFalse(competitions[2]["has_overview"])
+        self.assertContains(
+            response,
+            reverse(
+                "cricket_nepal:tournament_overview",
+                kwargs={"tournament_slug": "nepal-premier-league"},
+            ),
+        )
+        self.assertNotContains(
+            response,
+            reverse(
+                "cricket_nepal:tournament_overview",
+                kwargs={
+                    "tournament_slug": "icc-mens-cricket-world-cup-league-2"
+                },
+            ),
+        )
+
+    def test_tournament_gender_filter_shows_npl_as_men_only(self):
+        nepal_tournaments = [
+            {
+                "tournament_id": 3000,
+                "tournament_name": "Women's Invitational",
+                "season": "2026",
+                "gender": "female",
+            },
+            {
+                "tournament_id": 3001,
+                "tournament_name": "Men's Cup",
+                "season": "2025",
+                "gender": "male",
+            },
+        ]
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch(
+                "cricket_nepal.views.get_nepal_tournaments",
+                return_value=nepal_tournaments,
+            ),
+            patch(
+                "cricket_nepal.views.get_tournament_match_formats",
+                return_value=[
+                    {
+                        "source": "NPL",
+                        "tournament_name": "Nepal Premier League",
+                        "season": season["season"],
+                        "gender": "female",
+                        "match_format": "T20",
+                    }
+                    for season in self.tournaments
+                ]
+                + [
+                    {
+                        "source": "Nepal national team",
+                        "tournament_name": tournament["tournament_name"],
+                        "season": tournament["season"],
+                        "gender": tournament["gender"],
+                        "match_format": "ODI"
+                        if tournament["gender"] == "female"
+                        else "T20",
+                    }
+                    for tournament in nepal_tournaments
+                ],
+            ),
+        ):
+            men = self.client.get(reverse("cricket_nepal:tournaments"), {"gender": "men"})
+            women = self.client.get(
+                reverse("cricket_nepal:tournaments"), {"gender": "women"}
+            )
+
+        self.assertEqual(men.status_code, 200)
+        self.assertEqual(women.status_code, 200)
+        self.assertEqual(
+            [row["tournament_name"] for row in men.context["tournaments"]],
+            ["Nepal Premier League", "Men's Cup"],
+        )
+        self.assertEqual(
+            [row["tournament_name"] for row in women.context["tournaments"]],
+            ["Women's Invitational"],
+        )
+        self.assertTrue(men.context["tournaments"][0]["has_overview"])
+        self.assertEqual(men.context["selected_gender"], "men")
+        self.assertEqual(women.context["selected_gender"], "women")
+        self.assertContains(men, '<option value="men" selected')
+        self.assertContains(women, '<option value="women" selected')
+
+    def test_tournament_season_filter_is_dynamic_and_combines_with_gender(self):
+        nepal_tournaments = [
+            {
+                "tournament_id": 2177,
+                "tournament_name": "Men's Cup",
+                "season": "2026",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 2178,
+                "tournament_name": "Women's Cup",
+                "season": "2026",
+                "gender": "female",
+            },
+            {
+                "tournament_id": 2179,
+                "tournament_name": "Men's Cup",
+                "season": "2025/26",
+                "gender": "male",
+            },
+        ]
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch(
+                "cricket_nepal.views.get_nepal_tournaments",
+                return_value=nepal_tournaments,
+            ),
+            patch(
+                "cricket_nepal.views.get_tournament_match_formats",
+                return_value=[
+                    {
+                        "source": "NPL",
+                        "tournament_name": "Nepal Premier League",
+                        "season": season["season"],
+                        "gender": "male",
+                        "match_format": "T20",
+                    }
+                    for season in self.tournaments
+                ]
+                + [
+                    {
+                        "source": "Nepal national team",
+                        "tournament_name": tournament["tournament_name"],
+                        "season": tournament["season"],
+                        "gender": tournament["gender"],
+                        "match_format": "T20I"
+                        if tournament["gender"] == "female"
+                        else "T20",
+                    }
+                    for tournament in nepal_tournaments
+                ],
+            ),
+        ):
+            men_2026 = self.client.get(
+                reverse("cricket_nepal:tournaments"),
+                {"gender": "men", "season": "2026"},
+            )
+            women_2026 = self.client.get(
+                reverse("cricket_nepal:tournaments"),
+                {"gender": "women", "season": "2026"},
+            )
+            all_2026 = self.client.get(
+                reverse("cricket_nepal:tournaments"), {"season": "2026"}
+            )
+
+        self.assertEqual(
+            [row["tournament_name"] for row in men_2026.context["tournaments"]],
+            ["Men's Cup"],
+        )
+        self.assertEqual(
+            [row["tournament_name"] for row in women_2026.context["tournaments"]],
+            ["Women's Cup"],
+        )
+        self.assertEqual(
+            [row["tournament_name"] for row in all_2026.context["tournaments"]],
+            ["Men's Cup", "Women's Cup"],
+        )
+        self.assertIn("2026", men_2026.context["season_options"])
+        self.assertIn("2025/26", men_2026.context["season_options"])
+        self.assertEqual(men_2026.context["selected_gender"], "men")
+        self.assertEqual(men_2026.context["selected_season"], "2026")
+        self.assertContains(men_2026, '<option value="2026" selected')
+
+    def test_match_type_options_and_filters_use_actual_formats(self):
+        nepal_tournaments = [
+            {
+                "tournament_id": 3000,
+                "tournament_name": "Men's ODI Cup",
+                "season": "2026",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 3001,
+                "tournament_name": "Men's T20 Cup",
+                "season": "2026",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 3002,
+                "tournament_name": "Men's T20I Cup",
+                "season": "2026",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 3003,
+                "tournament_name": "Men's Other Cup",
+                "season": "2026",
+                "gender": "male",
+            },
+            {
+                "tournament_id": 3004,
+                "tournament_name": "Women's ODI Cup",
+                "season": "2026",
+                "gender": "female",
+            },
+            {
+                "tournament_id": 3005,
+                "tournament_name": "No Matching Format",
+                "season": "2026",
+                "gender": "male",
+            },
+        ]
+        format_rows = [
+            {
+                "source": "NPL",
+                "tournament_name": "Nepal Premier League",
+                "season": tournament["season"],
+                "gender": "female",
+                "match_format": "T20",
+            }
+            for tournament in self.tournaments
+        ]
+        format_rows.extend(
+            {
+                "source": "Nepal national team",
+                "tournament_name": tournament["tournament_name"],
+                "season": tournament["season"],
+                "gender": tournament["gender"],
+                "match_format": match_format,
+            }
+            for tournament, match_format in zip(
+                nepal_tournaments[:5],
+                ["ODI", "T20", "T20I", "Others", "ODI"],
+                strict=True,
+            )
+        )
+        format_rows.append(
+            {
+                "source": "Nepal national team",
+                "tournament_name": "Men's Other Cup",
+                "season": "2026",
+                "gender": "male",
+                "match_format": "List A",
+            }
+        )
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch(
+                "cricket_nepal.views.get_nepal_tournaments",
+                return_value=nepal_tournaments,
+            ),
+            patch(
+                "cricket_nepal.views.get_tournament_match_formats",
+                return_value=format_rows,
+            ),
+        ):
+            all_types = self.client.get(reverse("cricket_nepal:tournaments"))
+            by_type = {
+                match_type: self.client.get(
+                    reverse("cricket_nepal:tournaments"),
+                    {"match_type": match_type.lower()},
+                )
+                for match_type in ("ODI", "T20", "T20I", "Others")
+            }
+            men_odi_2026 = self.client.get(
+                reverse("cricket_nepal:tournaments"),
+                {"gender": "men", "season": "2026", "match_type": "odi"},
+            )
+            women_odi_2026 = self.client.get(
+                reverse("cricket_nepal:tournaments"),
+                {"gender": "women", "season": "2026", "match_type": "odi"},
+            )
+
+        self.assertEqual(all_types.context["selected_match_type"], "all")
+        self.assertEqual(
+            all_types.context["match_type_options"], ["ODI", "T20", "T20I", "Others"]
+        )
+        self.assertContains(all_types, '<option value="all" selected>All match types')
+        self.assertEqual(
+            {
+                tournament["tournament_name"]
+                for tournament in all_types.context["tournaments"]
+            },
+            {
+                "Nepal Premier League",
+                "Men's ODI Cup",
+                "Men's T20 Cup",
+                "Men's T20I Cup",
+                "Men's Other Cup",
+                "Women's ODI Cup",
+            },
+        )
+        self.assertIn("Nepal Premier League", [
+            tournament["tournament_name"]
+            for tournament in by_type["T20"].context["tournaments"]
+        ])
+        self.assertNotIn(
+            "Nepal Premier League",
+            [
+                tournament["tournament_name"]
+                for tournament in by_type["ODI"].context["tournaments"]
+            ],
+        )
+        expected = {
+            "ODI": {"Men's ODI Cup", "Women's ODI Cup"},
+            "T20": {"Nepal Premier League", "Men's T20 Cup"},
+            "T20I": {"Men's T20I Cup"},
+            "Others": {"Men's Other Cup"},
+        }
+        for match_type, response in by_type.items():
+            self.assertEqual(
+                {
+                    tournament["tournament_name"]
+                    for tournament in response.context["tournaments"]
+                },
+                expected[match_type],
+            )
+            self.assertEqual(response.context["selected_match_type"], match_type.lower())
+            self.assertContains(
+                response, f'<option value="{match_type.lower()}" selected'
+            )
+
+        self.assertEqual(
+            [row["tournament_name"] for row in men_odi_2026.context["tournaments"]],
+            ["Men's ODI Cup"],
+        )
+        self.assertEqual(
+            [row["tournament_name"] for row in women_odi_2026.context["tournaments"]],
+            ["Women's ODI Cup"],
+        )
+        self.assertEqual(men_odi_2026.context["selected_gender"], "men")
+        self.assertEqual(men_odi_2026.context["selected_season"], "2026")
+        self.assertEqual(men_odi_2026.context["selected_match_type"], "odi")
+        self.assertNotIn(
+            "No Matching Format",
+            [row["tournament_name"] for row in by_type["ODI"].context["tournaments"]],
+        )
+        self.assertNotIn(
+            "No Matching Format",
+            [
+                row["tournament_name"]
+                for row in all_types.context["tournaments"]
+            ],
+        )
+
+    def test_homepage_tournament_listing_remains_npl_only(self):
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch("cricket_nepal.views.get_nepal_tournaments") as nepal_query,
+        ):
+            response = self.client.get(reverse("cricket_nepal:home"))
+
+        self.assertEqual(response.status_code, 200)
+        nepal_query.assert_not_called()
+        self.assertEqual(
+            [row["tournament_name"] for row in response.context["tournaments"]],
+            ["Nepal Premier League"],
+        )
 
     def _overview(self):
         return {
@@ -712,14 +1195,40 @@ class PlayerDirectoryTests(SimpleTestCase):
             "/nepal-national-team/",
         )
 
-    def test_national_team_page_is_a_placeholder_without_invented_players(self):
-        response = self.client.get(reverse("cricket_nepal:national_team_players"))
+    def test_national_team_page_renders_searchable_player_directory(self):
+        players = [
+            {
+                "nepal_player_id": 7,
+                "player_name": "A National Player",
+                "gender": "female",
+                "participations": [],
+            }
+        ]
+        with patch(
+            "cricket_nepal.views.get_nepal_player_directory",
+            return_value=players,
+        ) as directory_query:
+            response = self.client.get(reverse("cricket_nepal:national_team_players"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nepal National Team")
-        self.assertContains(response, "No Nepal national team player data is available yet.")
-        self.assertNotContains(response, "Player profiles")
+        self.assertContains(response, "A National Player")
+        self.assertContains(response, "Female")
+        self.assertContains(response, "Search by player name")
+        self.assertContains(response, "Gender")
+        self.assertContains(response, "1 player")
+        directory_query.assert_called_once_with("", gender=None)
         self.assertContains(response, reverse("cricket_nepal:players"))
+
+    def test_national_team_player_profile_route_is_separate_from_npl_profile(self):
+        self.assertEqual(
+            reverse("cricket_nepal:national_team_player_profile", args=[42]),
+            "/nepal-national-team/players/42/",
+        )
+        self.assertEqual(
+            reverse("cricket_nepal:player_profile", args=[42]),
+            "/players/42/",
+        )
 
     def test_directory_lists_participation_and_links_to_profiles(self):
         players = [

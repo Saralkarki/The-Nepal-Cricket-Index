@@ -1,0 +1,95 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}{{ profile.player_name }} · Nepal National Team Player{% endblock %}
+
+{% block content %}
+<section class="page-section player-profile">
+    <a class="match-back-link" href="{% url 'cricket_nepal:national_team_players' %}">← Nepal National Team Players</a>
+
+    <header class="player-page-heading profile-heading">
+        <p class="eyebrow section-eyebrow">Nepal national-team player</p>
+        <h1>{{ profile.player_name }}</h1>
+    </header>
+
+    <section class="player-information" aria-label="Player information">
+        <div>
+            <p class="player-info-label">Gender</p>
+            <p>{{ profile.gender|title }}</p>
+        </div>
+        <div>
+            <p class="player-info-label">Recorded scorecard appearances</p>
+            <p class="player-match-count">{{ profile.recorded_scorecard_appearances }}</p>
+            <span class="player-muted">Based on batting and bowling scorecards; not a definitive appearance total.</span>
+        </div>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="national-participations-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Tournament records</p>
+                <h2 id="national-participations-heading">Tournament participation</h2>
+            </div>
+        </div>
+        {% if profile.participations %}
+        <ul class="profile-participations">
+            {% for participation in profile.participations %}
+            <li>
+                <strong>{{ participation.season|default:"Season unavailable" }}</strong>
+                <span>{{ participation.tournament_name }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="player-muted">No tournament participation recorded for ODI, T20I or T20 competitions.</p>
+        {% endif %}
+    </section>
+
+    {% for format_stats in profile.formats %}
+    <section class="player-stats-section" aria-labelledby="format-{{ format_stats.name|lower }}">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Format-specific statistics</p>
+                <h2 id="format-{{ format_stats.name|lower }}">{{ format_stats.name }}</h2>
+            </div>
+        </div>
+        <div class="player-stat-groups">
+            <section class="player-stat-group">
+                <h3>Batting</h3>
+                {% if format_stats.batting %}
+                <dl class="player-stat-grid">
+                    <div><dt>Runs</dt><dd>{{ format_stats.batting.runs|floatformat:0 }}</dd></div>
+                    <div><dt>Innings</dt><dd>{{ format_stats.batting.innings }}</dd></div>
+                    <div><dt>Average</dt><dd>{{ format_stats.batting.average|floatformat:2|default_if_none:"—" }}</dd></div>
+                    <div><dt>Strike rate</dt><dd>{{ format_stats.batting.strike_rate|floatformat:2|default_if_none:"—" }}</dd></div>
+                    <div><dt>Highest score</dt><dd>{{ format_stats.batting.highest_score|floatformat:0|default_if_none:"—" }}</dd></div>
+                    <div><dt>Fours / sixes</dt><dd>{{ format_stats.batting.fours }} / {{ format_stats.batting.sixes }}</dd></div>
+                    <div><dt>Fifties / hundreds</dt><dd>{{ format_stats.batting.fifties }} / {{ format_stats.batting.hundreds }}</dd></div>
+                    <div><dt>Dot-ball %</dt><dd>{{ format_stats.batting.dot_ball_percentage|floatformat:2|default_if_none:"—" }}{% if format_stats.batting.dot_ball_percentage is not None %}%{% endif %}</dd></div>
+                </dl>
+                {% else %}
+                <p class="player-muted">Batting statistics unavailable for this format.</p>
+                {% endif %}
+            </section>
+
+            <section class="player-stat-group">
+                <h3>Bowling</h3>
+                {% if format_stats.bowling %}
+                <dl class="player-stat-grid">
+                    <div><dt>Wickets</dt><dd>{{ format_stats.bowling.wickets|floatformat:0 }}</dd></div>
+                    <div><dt>Innings</dt><dd>{{ format_stats.bowling.innings }}</dd></div>
+                    <div><dt>Overs</dt><dd>{{ format_stats.bowling.overs }}</dd></div>
+                    <div><dt>Average</dt><dd>{{ format_stats.bowling.average|floatformat:2|default_if_none:"—" }}</dd></div>
+                    <div><dt>Economy</dt><dd>{{ format_stats.bowling.economy|floatformat:2|default_if_none:"—" }}</dd></div>
+                    <div><dt>Strike rate</dt><dd>{{ format_stats.bowling.strike_rate|floatformat:2|default_if_none:"—" }}</dd></div>
+                    <div><dt>Best figures</dt><dd>{{ format_stats.bowling.best_figures.wickets|floatformat:0 }}/{{ format_stats.bowling.best_figures.runs_conceded|floatformat:0 }}</dd></div>
+                    <div><dt>Maidens</dt><dd>{{ format_stats.bowling.maidens }}</dd></div>
+                </dl>
+                {% else %}
+                <p class="player-muted">Bowling statistics unavailable for this format.</p>
+                {% endif %}
+            </section>
+        </div>
+    </section>
+    {% endfor %}
+</section>
+{% endblock %}

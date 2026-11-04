@@ -15,10 +15,11 @@ class NepalTournamentAccessTests(TestCase):
             ("tournament_id",),
             ("tournament_name",),
             ("season",),
+            ("gender",),
         ]
         cursor.fetchall.return_value = [
-            (2177, "ICC Men's Cricket World Cup League 2", "2026/27"),
-            (2158, "United Arab Emirates tour of Nepal", "2026"),
+            (2177, "ICC Men's Cricket World Cup League 2", "2026/27", "male"),
+            (2158, "United Arab Emirates tour of Nepal", "2026", "male"),
         ]
         connections.__getitem__.return_value.cursor.return_value.__enter__.return_value = (
             cursor
@@ -33,17 +34,20 @@ class NepalTournamentAccessTests(TestCase):
                     "tournament_id": 2177,
                     "tournament_name": "ICC Men's Cricket World Cup League 2",
                     "season": "2026/27",
+                    "gender": "male",
                 },
                 {
                     "tournament_id": 2158,
                     "tournament_name": "United Arab Emirates tour of Nepal",
                     "season": "2026",
+                    "gender": "male",
                 },
             ],
         )
         query = cursor.execute.call_args.args[0]
         self.assertIn("SELECT DISTINCT", query)
         self.assertIn("FROM nepal_matches", query)
+        self.assertIn("gender", query)
         connections.__getitem__.assert_called_once_with("cricket")
 
     @patch("cricket_nepal.nepal_data_access.connections")
@@ -53,6 +57,7 @@ class NepalTournamentAccessTests(TestCase):
             ("tournament_id",),
             ("tournament_name",),
             ("season",),
+            ("gender",),
         ]
         cursor.fetchall.return_value = []
         connections.__getitem__.return_value.cursor.return_value.__enter__.return_value = (

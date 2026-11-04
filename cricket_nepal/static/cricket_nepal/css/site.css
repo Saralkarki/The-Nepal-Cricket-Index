@@ -1020,6 +1020,7 @@ summary:focus-visible {
 }
 
 .player-search input,
+.player-search select,
 .player-season-filter select {
     min-height: 42px;
     padding: 0 11px;
@@ -1033,6 +1034,20 @@ summary:focus-visible {
 
 .player-search input {
     width: min(440px, 100%);
+}
+
+.player-search select {
+    min-width: 130px;
+}
+
+.player-search-gender label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--ink-soft);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
 .player-search button,

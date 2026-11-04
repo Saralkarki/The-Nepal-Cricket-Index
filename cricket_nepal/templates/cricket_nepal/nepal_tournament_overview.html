@@ -1,0 +1,114 @@
+{% extends "cricket_nepal/base.html" %}
+
+{% block title %}{{ overview.tournament_name }} · Tournament Overview{% endblock %}
+
+{% block content %}
+<section class="page-section npl-overview">
+    <a class="match-back-link" href="{% url 'cricket_nepal:tournaments' %}">← Tournaments</a>
+
+    <header class="tournament-hero">
+        <div>
+            <p class="eyebrow section-eyebrow">Nepal national-team tournament</p>
+            <h1>{{ overview.tournament_name }}</h1>
+            <p class="section-intro">
+                {% if overview.genders %}{{ overview.genders|join:" · "|title }}{% else %}Gender unavailable{% endif %}
+                ·
+                {% if overview.match_formats %}{{ overview.match_formats|join:" · " }}{% else %}Format unavailable{% endif %}
+            </p>
+            <p class="team-qualification-note">Statistics represent Nepal's performance only and are not complete competition-wide statistics.</p>
+        </div>
+        {% if is_league_2 %}
+        <form class="player-season-filter" method="get" aria-label="Select League 2 cycle">
+            <label for="league-2-cycle">Cycle</label>
+            <select id="league-2-cycle" name="cycle">
+                {% for cycle in cycle_options %}
+                <option value="{{ cycle.value }}"{% if selected_cycle == cycle.value %} selected{% endif %}>{{ cycle.label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+        </form>
+        {% endif %}
+    </header>
+
+    <section class="player-stats-section" aria-labelledby="nepal-performance-heading">
+        <div class="player-section-heading">
+            <div>
+                <p class="eyebrow section-eyebrow">Nepal performance{% if is_league_2 %} · {{ selected_cycle_label }}{% endif %}</p>
+                <h2 id="nepal-performance-heading">Match summary</h2>
+            </div>
+        </div>
+        <dl class="npl-summary-grid">
+            <div><dt>Matches played</dt><dd>{{ overview.performance.matches_played }}</dd></div>
+            <div><dt>Wins</dt><dd>{{ overview.performance.wins }}</dd></div>
+            <div><dt>Losses</dt><dd>{{ overview.performance.losses }}</dd></div>
+            <div><dt>Ties</dt><dd>{{ overview.performance.ties }}</dd></div>
+            <div><dt>No Results</dt><dd>{{ overview.performance.no_results }}</dd></div>
+            {% if overview.performance.unclassified %}
+            <div><dt>Unclassified outcomes</dt><dd>{{ overview.performance.unclassified }}</dd></div>
+            {% endif %}
+        </dl>
+        <p class="team-qualification-note">
+            Win percentage:
+            {% if overview.performance.win_percentage is not None %}{{ overview.performance.win_percentage|floatformat:1 }}%{% else %}Unavailable (no classified outcomes){% endif %}
+            · Ties are included; No Results and unclassified outcomes are excluded.
+        </p>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="nepal-batting-heading">
+        <div class="player-section-heading">
+            <div><p class="eyebrow section-eyebrow">Nepal records</p><h2 id="nepal-batting-heading">Batting records</h2></div>
+        </div>
+        <dl class="npl-record-grid">
+            <div>
+                <dt>Most runs</dt>
+                <dd>{% if overview.batting.most_runs %}{{ overview.batting.most_runs.batsman }} · {{ overview.batting.most_runs.runs|floatformat:0 }}{% else %}Unavailable{% endif %}</dd>
+            </div>
+            <div>
+                <dt>Highest individual score</dt>
+                <dd>{% if overview.batting.highest_score %}{{ overview.batting.highest_score.batsman }} · {{ overview.batting.highest_score.runs|floatformat:0 }}{% else %}Unavailable{% endif %}</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="nepal-bowling-heading">
+        <div class="player-section-heading">
+            <div><p class="eyebrow section-eyebrow">Nepal records</p><h2 id="nepal-bowling-heading">Bowling records</h2></div>
+        </div>
+        <dl class="npl-record-grid">
+            <div>
+                <dt>Most wickets</dt>
+                <dd>{% if overview.bowling.most_wickets %}{{ overview.bowling.most_wickets.bowler }} · {{ overview.bowling.most_wickets.wickets|floatformat:0 }}{% else %}Unavailable{% endif %}</dd>
+            </div>
+            <div>
+                <dt>Best bowling figures</dt>
+                <dd>{% if overview.bowling.best_figures %}{{ overview.bowling.best_figures.bowler }} · {{ overview.bowling.best_figures.wickets|floatformat:0 }}/{{ overview.bowling.best_figures.runs_conceded|floatformat:0 }}{% else %}Unavailable{% endif %}</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="player-stats-section" aria-labelledby="nepal-match-history-heading">
+        <div class="player-section-heading">
+            <div><p class="eyebrow section-eyebrow">Nepal match history</p><h2 id="nepal-match-history-heading">Matches</h2></div>
+        </div>
+        {% if overview.matches %}
+        <div class="team-table-scroll">
+            <table class="npl-points-table">
+                <thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Scores</th></tr></thead>
+                <tbody>
+                    {% for match in overview.matches %}
+                    <tr>
+                        <td><a href="{% url 'cricket_nepal:nepal_match_detail' match.match_id %}">{{ match.match_date }}</a></td>
+                        <td>{{ match.opponent|default:"Opponent unavailable" }}</td>
+                        <td>{{ match.result }}</td>
+                        <td>{% for innings in match.scores %}{{ innings.batting_team }} {{ innings.score }}{% if not forloop.last %}<br>{% endif %}{% empty %}Unavailable{% endfor %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="player-empty-state">No Nepal matches are available for this competition.</p>
+        {% endif %}
+    </section>
+</section>
+{% endblock %}

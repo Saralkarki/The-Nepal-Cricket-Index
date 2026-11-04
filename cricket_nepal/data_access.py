@@ -333,7 +333,8 @@ def get_npl_tournament_overview(
         cursor.execute(
             f"""
             SELECT b.match_id, b.innings_number, p.player_id, p.player_name,
-                   b.runs, b.balls_faced, b.is_out, b.dot_balls
+                   b.runs, b.balls_faced, b.is_out, b.dot_balls,
+                   b.fours, b.sixes
             FROM batting_scorecards AS b
             JOIN matches AS m ON m.match_id = b.match_id
             JOIN players AS p ON p.player_id = b.player_id
@@ -412,6 +413,8 @@ def get_npl_tournament_overview(
             for row in selected_innings
             if row["innings_number"] in (1, 2)
         ),
+        "fours": sum(row["fours"] or 0 for row in batting_rows),
+        "sixes": sum(row["sixes"] or 0 for row in batting_rows),
         "total_wickets": sum(
             row["total_wickets"] or 0
             for row in selected_innings

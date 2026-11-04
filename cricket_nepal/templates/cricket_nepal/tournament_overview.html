@@ -4,7 +4,7 @@
 
 {% block content %}
 <section class="page-section npl-overview">
-    <a class="match-back-link" href="{% url 'cricket_nepal:tournaments' %}">← Tournaments</a>
+    <a class="match-back-link" href="{% url 'cricket_nepal:home' %}">← Dashboard</a>
 
     <header class="tournament-hero">
         <div>
@@ -50,6 +50,8 @@
             <div><dt>Teams</dt><dd>{{ overview.summary.teams }}</dd></div>
             <div><dt>Players</dt><dd>{{ overview.summary.players }}</dd></div>
             <div><dt>Total runs</dt><dd>{{ overview.summary.total_runs }}</dd></div>
+            <div><dt>Fours</dt><dd>{{ overview.summary.fours }}</dd></div>
+            <div><dt>Sixes</dt><dd>{{ overview.summary.sixes }}</dd></div>
         </dl>
     </section>
 

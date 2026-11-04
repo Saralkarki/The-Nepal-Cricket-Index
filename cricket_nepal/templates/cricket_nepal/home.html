@@ -8,13 +8,12 @@
         <p class="eyebrow section-eyebrow">Nepal Cricket Dataset</p>
         <h1>A growing record of cricket in Nepal.</h1>
         <p class="section-intro">
-            Explore structured match, team and player data from Nepal's cricket competitions.
-            Nepal Premier League data is available now, with space to add more competitions over time.
+            Explore Nepal Premier League records and Nepal national-team competitions
+            through separate, dedicated sections.
         </p>
         <nav class="dataset-shortcuts" aria-label="Explore the dataset">
-            <a href="{% url 'cricket_nepal:tournaments' %}">Browse tournaments <span aria-hidden="true">→</span></a>
-            <a href="{% url 'cricket_nepal:players' %}">Explore players <span aria-hidden="true">→</span></a>
-            <a href="{% url 'cricket_nepal:npl_matches' %}">Browse NPL matches <span aria-hidden="true">→</span></a>
+            <a href="{% url 'cricket_nepal:npl_home' %}">Explore NPL <span aria-hidden="true">→</span></a>
+            <a href="{% url 'cricket_nepal:national_team_players' %}">Explore Nepal National Team <span aria-hidden="true">→</span></a>
         </nav>
     </div>
 </section>
@@ -22,25 +21,31 @@
 <section class="page-section dataset-tournaments" aria-labelledby="available-tournaments-heading">
     <div class="section-heading">
         <div>
-            <p class="eyebrow section-eyebrow">Available competition</p>
-            <h2 id="available-tournaments-heading">Tournaments</h2>
-            <p class="section-intro">The collection currently contains Nepal Premier League records.</p>
+            <p class="eyebrow section-eyebrow">Explore by dataset</p>
+            <h2 id="available-tournaments-heading">Choose a competition</h2>
+            <p class="section-intro">Each section has its own competitions, player records and statistics.</p>
         </div>
-        <a class="text-link" href="{% url 'cricket_nepal:tournaments' %}">All tournaments <span aria-hidden="true">→</span></a>
     </div>
-    <div class="dataset-tournament-list">
-        {% for tournament in tournaments %}
-        <article class="dataset-tournament-card">
+    <div class="dataset-landing-grid">
+        <article class="dataset-landing-card">
             <div>
-                <p class="eyebrow section-eyebrow">Currently available</p>
-                <h3><a href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">{{ tournament.tournament_name }}</a></h3>
-                <p class="team-seasons">Seasons {{ tournament.seasons|join:" · " }}</p>
+                <p class="eyebrow section-eyebrow">Franchise competition</p>
+                <h3>Nepal Premier League</h3>
+                <p class="section-intro">Browse NPL season overviews, teams, players, match records and statistics.</p>
             </div>
-            <a class="team-card-link" href="{% url 'cricket_nepal:tournament_overview' tournament.tournament_slug %}">View tournament <span aria-hidden="true">→</span></a>
+            <a class="team-card-link" href="{% url 'cricket_nepal:npl_home' %}">Explore NPL <span aria-hidden="true">→</span></a>
         </article>
-        {% empty %}
-        <p class="player-empty-state">No tournament data is available yet.</p>
-        {% endfor %}
+        <article class="dataset-landing-card">
+            <div>
+                <p class="eyebrow section-eyebrow">National team</p>
+                <h3>Nepal National Team</h3>
+                <p class="section-intro">Explore player profiles and the tournaments represented in Nepal's national-team data.</p>
+            </div>
+            <div class="dataset-landing-links">
+                <a class="team-card-link" href="{% url 'cricket_nepal:national_team_players' %}">Players <span aria-hidden="true">→</span></a>
+                <a class="team-card-link" href="{% url 'cricket_nepal:tournaments' %}">Tournaments <span aria-hidden="true">→</span></a>
+            </div>
+        </article>
     </div>
 </section>
 {% endblock %}

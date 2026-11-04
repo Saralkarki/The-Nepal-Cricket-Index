@@ -254,10 +254,11 @@ class NepalTournamentDirectoryLinkTests(SimpleTestCase):
             response,
             reverse("cricket_nepal:nepal_tournament_overview", args=[1097]),
         )
-        self.assertContains(
+        self.assertNotContains(
             response,
             reverse("cricket_nepal:tournament_overview", args=["nepal-premier-league"]),
         )
+        self.assertContains(response, reverse("cricket_nepal:npl_home"))
 
 
 class FakeCursor:

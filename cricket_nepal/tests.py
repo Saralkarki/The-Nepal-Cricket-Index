@@ -154,37 +154,85 @@ class HomepageTests(SimpleTestCase):
             "season": "2024/25",
         },
     ]
-    def test_homepage_is_general_and_has_no_npl_statistics(self):
-        with patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments):
+    def test_homepage_separates_npl_and_national_team_destinations(self):
+        with patch("cricket_nepal.views.get_tournaments") as npl_query:
             response = self.client.get(reverse("cricket_nepal:home"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nepal Cricket Dataset")
-        self.assertContains(response, "Tournaments")
-        self.assertContains(response, "Players")
-        self.assertContains(response, "NPL matches")
+        npl_query.assert_not_called()
+        self.assertContains(response, "Choose a competition")
         self.assertContains(response, "Nepal Premier League")
+        self.assertContains(response, "Nepal National Team")
+        self.assertContains(response, reverse("cricket_nepal:npl_home"))
+        self.assertContains(response, reverse("cricket_nepal:national_team_players"))
+        self.assertContains(response, reverse("cricket_nepal:tournaments"))
+        self.assertNotContains(response, "Browse tournaments")
+        self.assertNotContains(response, "Currently available")
         self.assertNotContains(response, "Total runs")
         self.assertNotContains(response, "Leading run scorer")
 
-    def test_tournament_directory_links_to_npl_overview(self):
+    def test_npl_home_displays_the_existing_npl_tournament_overview(self):
         with (
             patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
-            patch("cricket_nepal.views.get_nepal_tournaments", return_value=[]),
+            patch(
+                "cricket_nepal.views.get_npl_tournament_overview",
+                return_value={
+                    "summary": {
+                        "matches": 2,
+                        "teams": 2,
+                        "players": 4,
+                        "total_runs": 100,
+                    },
+                    "seasons": self.tournaments,
+                    "champions": [],
+                    "top_batters": [],
+                    "top_bowlers": [],
+                    "recent_matches": [],
+                    "season_comparison": [],
+                },
+            ) as overview_query,
+        ):
+            response = self.client.get(reverse("cricket_nepal:npl_home"))
+
+        self.assertEqual(response.status_code, 200)
+        overview_query.assert_called_once_with(None)
+        self.assertContains(response, "Nepal Premier League")
+        self.assertContains(response, "All NPL seasons")
+        self.assertContains(response, 'name="season_id"')
+
+    def test_tournament_directory_excludes_npl_data_and_lists_nepal_competitions(self):
+        nepal_tournaments = [
+            {
+                "tournament_id": 2177,
+                "tournament_name": "ICC Men's Cricket World Cup League 2",
+                "season": "2026/27",
+                "gender": "male",
+            }
+        ]
+        with (
+            patch(
+                "cricket_nepal.views.get_tournaments",
+                return_value=self.tournaments,
+            ) as npl_query,
+            patch(
+                "cricket_nepal.views.get_nepal_tournaments",
+                return_value=nepal_tournaments,
+            ),
             patch(
                 "cricket_nepal.views.get_tournament_match_formats",
                 return_value=[
                     {
-                        "source": "NPL",
-                        "tournament_name": "Nepal Premier League",
-                        "season": "2025/26",
+                        "source": "Nepal national team",
+                        "tournament_name": "ICC Men's Cricket World Cup League 2",
+                        "season": "2026/27",
                         "gender": "male",
-                        "match_format": "T20",
+                        "match_format": "ODI",
                     },
                     {
                         "source": "NPL",
                         "tournament_name": "Nepal Premier League",
-                        "season": "2024/25",
+                        "season": "2025/26",
                         "gender": "male",
                         "match_format": "T20",
                     },
@@ -194,21 +242,19 @@ class HomepageTests(SimpleTestCase):
             response = self.client.get(reverse("cricket_nepal:tournaments"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["selected_gender"], "all")
-        self.assertEqual(response.context["selected_season"], "all")
-        self.assertContains(response, 'name="gender"')
-        self.assertContains(response, 'name="season"')
-        self.assertContains(response, 'onchange="this.form.submit()"')
-        self.assertContains(response, '<option value="2025/26"')
-        self.assertContains(response, '<option value="2024/25"')
-        self.assertContains(
+        npl_query.assert_not_called()
+        self.assertEqual(
+            [row["tournament_name"] for row in response.context["tournaments"]],
+            ["ICC Men's Cricket World Cup League 2"],
+        )
+        self.assertNotContains(
             response,
             reverse(
                 "cricket_nepal:tournament_overview",
                 kwargs={"tournament_slug": "nepal-premier-league"},
             ),
         )
-        self.assertContains(response, "Seasons 2025/26 · 2024/25")
+        self.assertEqual(response.context["season_options"], ["2026/27"])
 
     def test_tournament_directory_combines_sources_without_duplicate_competitions(self):
         nepal_tournaments = [
@@ -296,21 +342,21 @@ class HomepageTests(SimpleTestCase):
         self.assertEqual(
             [row["tournament_name"] for row in competitions],
             [
-                "Nepal Premier League",
                 "ICC Men's Cricket World Cup League 2",
+                "Nepal Premier League",
                 "Women's Invitational",
             ],
         )
         self.assertEqual(
-            competitions[0]["seasons"], ["2025/26", "2024/25", "2027"]
+            competitions[0]["seasons"], ["2026/27", "2026"]
         )
-        self.assertEqual(competitions[0]["sources"], ["NPL", "Nepal national team"])
-        self.assertTrue(competitions[0]["has_overview"])
-        self.assertEqual(competitions[1]["seasons"], ["2026/27", "2026"])
+        self.assertEqual(competitions[0]["sources"], ["Nepal national team"])
         self.assertFalse(competitions[1]["has_overview"])
+        self.assertEqual(competitions[1]["seasons"], ["2027"])
+        self.assertEqual(competitions[1]["sources"], ["Nepal national team"])
         self.assertEqual(competitions[2]["seasons"], ["2026"])
         self.assertFalse(competitions[2]["has_overview"])
-        self.assertContains(
+        self.assertNotContains(
             response,
             reverse(
                 "cricket_nepal:tournament_overview",
@@ -383,13 +429,12 @@ class HomepageTests(SimpleTestCase):
         self.assertEqual(women.status_code, 200)
         self.assertEqual(
             [row["tournament_name"] for row in men.context["tournaments"]],
-            ["Nepal Premier League", "Men's Cup"],
+            ["Men's Cup"],
         )
         self.assertEqual(
             [row["tournament_name"] for row in women.context["tournaments"]],
             ["Women's Invitational"],
         )
-        self.assertTrue(men.context["tournaments"][0]["has_overview"])
         self.assertEqual(men.context["selected_gender"], "men")
         self.assertEqual(women.context["selected_gender"], "women")
         self.assertContains(men, '<option value="men" selected')
@@ -589,7 +634,6 @@ class HomepageTests(SimpleTestCase):
                 for tournament in all_types.context["tournaments"]
             },
             {
-                "Nepal Premier League",
                 "Men's ODI Cup",
                 "Men's T20 Cup",
                 "Men's T20I Cup",
@@ -597,10 +641,6 @@ class HomepageTests(SimpleTestCase):
                 "Women's ODI Cup",
             },
         )
-        self.assertIn("Nepal Premier League", [
-            tournament["tournament_name"]
-            for tournament in by_type["T20"].context["tournaments"]
-        ])
         self.assertNotIn(
             "Nepal Premier League",
             [
@@ -610,7 +650,7 @@ class HomepageTests(SimpleTestCase):
         )
         expected = {
             "ODI": {"Men's ODI Cup", "Women's ODI Cup"},
-            "T20": {"Nepal Premier League", "Men's T20 Cup"},
+            "T20": {"Men's T20 Cup"},
             "T20I": {"Men's T20I Cup"},
             "Others": {"Men's Other Cup"},
         }
@@ -650,24 +690,34 @@ class HomepageTests(SimpleTestCase):
             ],
         )
 
-    def test_homepage_tournament_listing_remains_npl_only(self):
+    def test_homepage_routes_npl_and_national_team_to_separate_sections(self):
         with (
-            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch(
+                "cricket_nepal.views.get_tournaments",
+                return_value=self.tournaments,
+            ) as npl_query,
             patch("cricket_nepal.views.get_nepal_tournaments") as nepal_query,
         ):
             response = self.client.get(reverse("cricket_nepal:home"))
 
         self.assertEqual(response.status_code, 200)
+        npl_query.assert_not_called()
         nepal_query.assert_not_called()
-        self.assertEqual(
-            [row["tournament_name"] for row in response.context["tournaments"]],
-            ["Nepal Premier League"],
-        )
+        self.assertContains(response, reverse("cricket_nepal:npl_home"))
+        self.assertContains(response, reverse("cricket_nepal:national_team_players"))
+        self.assertContains(response, reverse("cricket_nepal:tournaments"))
 
     def _overview(self):
         return {
             "seasons": self.tournaments,
-            "summary": {"matches": 64, "teams": 8, "players": 193, "total_runs": 10},
+            "summary": {
+                "matches": 64,
+                "teams": 8,
+                "players": 193,
+                "total_runs": 10,
+                "fours": 12,
+                "sixes": 4,
+            },
             "points_table": None,
             "points_table_limitation": None,
             "batting_leaders": {},
@@ -697,6 +747,8 @@ class HomepageTests(SimpleTestCase):
         self.assertIsNone(response.context["selected_season"])
         overview_query.assert_called_once_with(None)
         self.assertContains(response, "All NPL seasons")
+        self.assertContains(response, "<dt>Fours</dt><dd>12</dd>")
+        self.assertContains(response, "<dt>Sixes</dt><dd>4</dd>")
         self.assertNotContains(response, "Points table")
 
     def test_npl_overview_selects_requested_season(self):
@@ -1175,7 +1227,7 @@ class PlayerDirectoryTests(SimpleTestCase):
             "/players/25/",
         )
 
-    def test_header_players_menu_links_to_npl_and_national_team_pages(self):
+    def test_header_separates_npl_menu_from_national_team_and_groups_player_tools(self):
         with patch("cricket_nepal.views.get_player_directory", return_value=[]):
             response = self.client.get(reverse("cricket_nepal:players"))
 
@@ -1185,10 +1237,33 @@ class PlayerDirectoryTests(SimpleTestCase):
             rendered.split('<nav class="primary-nav" aria-label="Main navigation">', 1)[1]
             .split("</nav>", 1)[0]
         )
-        self.assertIn(">Players</a>", primary_nav)
-        self.assertIn(">NPL Players</a>", primary_nav)
+        npl_menu = primary_nav.split(">Nepal Premier League (NPL)</a>", 1)[1].split(
+            ">Nepal National Team</a>", 1
+        )[0]
+        national_team_menu = primary_nav.split(">Nepal National Team</a>", 1)[1].split(
+            ">About</a>", 1
+        )[0]
+        self.assertIn(">Nepal Premier League (NPL)</a>", primary_nav)
+        self.assertIn(">NPL Players</a>", npl_menu)
+        self.assertIn(">Player Statistics</span>", npl_menu)
+        self.assertIn(">Batting</a>", npl_menu)
+        self.assertIn(">Bowling</a>", npl_menu)
+        self.assertIn(">Fielding</a>", npl_menu)
+        self.assertIn(">Player Comparison</a>", npl_menu)
         self.assertIn(">Nepal National Team</a>", primary_nav)
+        self.assertIn(">National Team Players</a>", national_team_menu)
+        self.assertIn(">Tournaments</a>", national_team_menu)
+        self.assertIn(reverse("cricket_nepal:tournaments"), national_team_menu)
+        self.assertNotIn(
+            f'<a href="{reverse("cricket_nepal:tournaments")}">Tournaments</a>',
+            primary_nav.split(">Nepal Premier League (NPL)</a>", 1)[0],
+        )
         self.assertIn(reverse("cricket_nepal:players"), primary_nav)
+        self.assertIn(reverse("cricket_nepal:npl_home"), primary_nav)
+        self.assertIn(reverse("cricket_nepal:player_statistics_batting"), npl_menu)
+        self.assertIn(reverse("cricket_nepal:player_statistics_bowling"), npl_menu)
+        self.assertIn(reverse("cricket_nepal:player_statistics_fielding"), npl_menu)
+        self.assertIn(reverse("cricket_nepal:player_comparison"), npl_menu)
         self.assertIn(reverse("cricket_nepal:national_team_players"), primary_nav)
         self.assertEqual(
             reverse("cricket_nepal:national_team_players"),
@@ -2641,8 +2716,8 @@ class PlayerStatisticsPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         rendered = response.content.decode()
         nav = rendered.split(
-            '<div class="nav-dropdown-menu">', 2
-        )[2].split("</div>", 1)[0]
+            '<div class="nav-dropdown-menu">', 1
+        )[1].split("</div>", 1)[0]
         self.assertIn(
             f'href="{reverse("cricket_nepal:player_statistics_fielding")}" aria-current="page">Fielding</a>',
             nav,

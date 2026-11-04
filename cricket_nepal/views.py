@@ -132,20 +132,18 @@ def _get_tournament_selection(request):
 
 
 def home(request):
-    return render(
-        request,
-        "cricket_nepal/home.html",
-        {"tournaments": _tournament_directory()},
-    )
+    return render(request, "cricket_nepal/home.html")
 
 
 def about(request):
     return render(request, "cricket_nepal/about.html")
 
 
-def _tournament_directory(include_nepal=False):
+def _tournament_directory(include_nepal=False, include_npl=True):
     tournaments_by_name = {}
-    tournament_sources = [(get_tournaments(), "NPL", "male", True)]
+    tournament_sources = []
+    if include_npl:
+        tournament_sources.append((get_tournaments(), "NPL", "male", True))
     if include_nepal:
         tournament_sources.append(
             (get_nepal_tournaments(), "Nepal national team", None, False)
@@ -220,7 +218,7 @@ def _tournament_directory(include_nepal=False):
 
 
 def tournaments(request):
-    all_tournaments = _tournament_directory(include_nepal=True)
+    all_tournaments = _tournament_directory(include_nepal=True, include_npl=False)
     all_formats = {
         match_format.strip().upper()
         for tournament in all_tournaments
@@ -429,6 +427,10 @@ def tournament_overview(request, tournament_slug: str):
             "tournament_slug": npl_slug,
         },
     )
+
+
+def npl_home(request):
+    return tournament_overview(request, slugify("Nepal Premier League"))
 
 
 def matches(request):

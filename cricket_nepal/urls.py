@@ -7,6 +7,7 @@ app_name = "cricket_nepal"
 urlpatterns = [
     path("", views.home, name="home"),
     path("about/", views.about, name="about"),
+    path("npl/", views.npl_home, name="npl_home"),
     path("tournaments/", views.tournaments, name="tournaments"),
     path(
         "tournaments/<slug:tournament_slug>/",

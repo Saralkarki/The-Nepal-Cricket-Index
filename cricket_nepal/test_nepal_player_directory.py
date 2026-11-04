@@ -16,7 +16,7 @@ class NepalPlayerDirectoryViewTests(SimpleTestCase):
     def setUp(self):
         self.client = Client()
 
-    def test_directory_shows_gender_participation_count_and_profile_link(self):
+    def test_directory_shows_gender_count_and_profile_link_without_tournament_list(self):
         players = [
             {
                 "nepal_player_id": 7,
@@ -43,7 +43,7 @@ class NepalPlayerDirectoryViewTests(SimpleTestCase):
         directory_query.assert_called_once_with("Player", gender="female")
         self.assertEqual(response.context["player_count"], 1)
         self.assertContains(response, "Female")
-        self.assertContains(response, "T20I Cup")
+        self.assertNotContains(response, "T20I Cup")
         self.assertContains(
             response,
             reverse("cricket_nepal:national_team_player_profile", args=[7]),
@@ -79,8 +79,21 @@ class NepalPlayerDirectoryViewTests(SimpleTestCase):
             "nepal_player_id": 7,
             "player_name": "A Player",
             "gender": "female",
-            "recorded_scorecard_appearances": 4,
-            "participations": [],
+            "participations": [
+                {
+                    "tournament_id": 12,
+                    "tournament_name": "Women's T20I Cup",
+                    "season": "2025",
+                    "matches": [
+                        {
+                            "match_id": "match-12",
+                            "match_date": "2025-01-05",
+                            "match_format": "T20I",
+                            "opponent": "Thailand",
+                        }
+                    ],
+                }
+            ],
             "formats": [
                 {"name": "ODI", "batting": None, "bowling": None},
                 {
@@ -109,7 +122,12 @@ class NepalPlayerDirectoryViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Female")
-        self.assertContains(response, "Recorded scorecard appearances")
+        self.assertContains(response, "Recorded appearances by format")
+        self.assertContains(
+            response,
+            "Provisional figures based on available scorecards; counts may be updated as data review and cleansing continue.",
+        )
+        self.assertNotContains(response, "Recorded scorecard appearances")
         self.assertContains(response, "ODI")
         self.assertContains(response, "T20I")
         self.assertContains(response, "T20")
@@ -118,6 +136,23 @@ class NepalPlayerDirectoryViewTests(SimpleTestCase):
         self.assertContains(response, "Bowling statistics unavailable for this format.")
         self.assertContains(response, "Tournament participation")
         self.assertNotContains(response, "Overall statistics")
+        self.assertContains(response, "T20I Cup")
+        self.assertContains(response, "Recorded scorecard matches")
+        self.assertContains(response, "2025-01-05 · vs Thailand")
+        self.assertContains(
+            response,
+            reverse("cricket_nepal:nepal_match_detail", args=["match-12"]),
+        )
+        self.assertNotContains(
+            response,
+            reverse("cricket_nepal:nepal_tournament_overview", args=[12]),
+        )
+        self.assertNotContains(response, "<details class=\"national-participation-details\" open>")
+        rendered = response.content.decode()
+        self.assertLess(
+            rendered.index('id="format-odi"'),
+            rendered.index('class="national-participation-details"'),
+        )
 
     def test_unknown_profile_returns_404(self):
         with patch(
@@ -144,9 +179,20 @@ class FakeCursor:
     def execute(self, query, parameters=None):
         parameters = tuple(parameters or ())
         self.executions.append((query, parameters))
-        if "COUNT(DISTINCT match_id)" in query:
-            self.description = [("count",)]
-            self.rows = [(2,)]
+        if "WITH player_scorecard_matches AS" in query:
+            self.description = [
+                ("tournament_id",),
+                ("match_id",),
+                ("match_date",),
+                ("match_format",),
+                ("team_1_name",),
+                ("team_2_name",),
+            ]
+            self.rows = [
+                (12, "t20i-1", "2025-02-01", "T20I", "Nepal", "Thailand"),
+                (12, "odi-2", "2025-01-12", "ODI", "Thailand", "Nepal"),
+                (12, "odi-1", "2025-01-05", "ODI", "Nepal", "Thailand"),
+            ]
         elif "FROM nepal_players" in query:
             self.description = [
                 ("nepal_player_id",),
@@ -239,15 +285,31 @@ class NepalPlayerDataAccessTests(SimpleTestCase):
         self.assertIsNone(profile["formats"][0]["bowling"])
         self.assertIsNone(profile["formats"][1]["batting"])
         self.assertEqual(profile["formats"][2]["bowling"]["best_figures"]["wickets"], 2)
-        self.assertEqual(profile["recorded_scorecard_appearances"], 2)
+        self.assertEqual(
+            [row["recorded_appearances"] for row in profile["formats"]], [2, 1, 0]
+        )
+        self.assertEqual(
+            [match["match_id"] for match in profile["participations"][0]["matches"]],
+            ["t20i-1", "odi-2", "odi-1"],
+        )
+        self.assertEqual(
+            profile["participations"][0]["matches"][0]["opponent"], "Thailand"
+        )
         format_queries = [
             (query, params)
             for query, params in cursor.executions
-            if "match_format IN" in query
+            if "match_format IN" in query and "WITH player_scorecard_matches" not in query
         ]
-        self.assertEqual(len(format_queries), 4)
+        self.assertEqual(len(format_queries), 3)
         for _, parameters in format_queries:
             self.assertNotIn("Others", parameters)
+        match_query, match_parameters = next(
+            (query, parameters)
+            for query, parameters in cursor.executions
+            if "WITH player_scorecard_matches AS" in query
+        )
+        self.assertIn("JOIN nepal_matches", match_query)
+        self.assertNotIn("Others", match_parameters)
 
 
 class NepalPlayerStatsCalculationTests(SimpleTestCase):

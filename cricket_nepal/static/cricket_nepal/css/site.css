@@ -1126,6 +1126,35 @@ summary:focus-visible {
     color: var(--green);
 }
 
+.national-player-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    border: 0;
+}
+
+.national-player-row {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    background: var(--white);
+}
+
+.national-player-row h3 {
+    margin-bottom: 7px;
+}
+
+.national-player-gender {
+    display: inline-flex;
+    padding: 4px 7px;
+    background: var(--paper);
+    color: var(--ink-soft);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
 .player-participation-list,
 .profile-participations {
     display: grid;
@@ -1190,6 +1219,161 @@ summary:focus-visible {
     color: var(--navy);
 }
 
+.national-participation-details {
+    border: 1px solid var(--line);
+    background: var(--white);
+}
+
+.national-participation-details summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 18px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.national-participation-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.national-participation-details summary::after {
+    color: var(--green);
+    content: "+";
+    font-size: 20px;
+    line-height: 1;
+}
+
+.national-participation-details[open] summary::after {
+    content: "-";
+}
+
+.national-participation-details summary > span:first-child {
+    display: grid;
+    gap: 5px;
+}
+
+.national-participation-details .eyebrow {
+    margin: 0;
+}
+
+.national-participation-title {
+    color: var(--navy);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 21px;
+}
+
+.national-participation-count {
+    color: var(--ink-soft);
+    font-size: 11px;
+}
+
+.national-participation-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0 18px 18px;
+    list-style: none;
+}
+
+.national-tournament-card {
+    height: 100%;
+    border: 1px solid var(--line);
+    background: var(--white);
+}
+
+.national-tournament-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+}
+
+.national-tournament-heading h3 {
+    margin: 0;
+    color: var(--navy);
+    font-size: 13px;
+}
+
+.national-tournament-heading > span {
+    flex: 0 0 auto;
+    color: var(--ink-soft);
+    font-size: 10px;
+}
+
+.national-tournament-matches {
+    border-top: 1px solid var(--line);
+}
+
+.national-tournament-matches summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-size: 11px;
+    list-style: none;
+}
+
+.national-tournament-matches summary::-webkit-details-marker {
+    display: none;
+}
+
+.national-tournament-matches summary::after {
+    color: var(--green);
+    content: "+";
+    font-size: 15px;
+    line-height: 1;
+}
+
+.national-tournament-matches[open] summary::after {
+    content: "-";
+}
+
+.national-tournament-matches summary span:last-child {
+    flex: 0 0 auto;
+}
+
+.national-tournament-match-list {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0 10px 10px;
+    list-style: none;
+}
+
+.national-tournament-match-list a {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px;
+    color: var(--navy);
+    font-size: 10px;
+    text-decoration: none;
+}
+
+.national-tournament-match-list a:hover,
+.national-tournament-match-list a:focus-visible {
+    background: var(--paper);
+    color: var(--green);
+}
+
+.national-tournament-match-list a span:last-child {
+    flex: 0 0 auto;
+    color: var(--ink-soft);
+}
+
+.national-tournament-empty {
+    margin: 0;
+    padding: 0 12px 12px;
+    font-size: 11px;
+}
+
 .player-attributes-section {
     margin-top: 26px;
 }
@@ -1221,6 +1405,31 @@ summary:focus-visible {
     color: var(--navy);
     font-family: Georgia, "Times New Roman", serif;
     font-size: 34px;
+}
+
+.player-appearance-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 8px 0 6px;
+}
+
+.player-appearance-counts div {
+    display: grid;
+    gap: 2px;
+}
+
+.player-appearance-counts dt {
+    color: var(--ink-soft);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.player-appearance-counts dd {
+    margin: 0;
+    color: var(--navy);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 24px;
 }
 
 .player-stats-section {
@@ -3297,7 +3506,11 @@ summary:focus-visible {
     .player-directory-heading,
     .player-section-heading {
         align-items: flex-start;
-        flex-direction: column;
+    }
+
+    .national-player-list,
+    .national-participation-list {
+        grid-template-columns: 1fr;
     }
 
     .team-directory-grid {

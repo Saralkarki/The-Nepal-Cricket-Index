@@ -236,20 +236,26 @@ def get_nepal_player_profile(nepal_player_id: int) -> dict[str, Any] | None:
 
         cursor.execute(
             f"""
-            SELECT COUNT(DISTINCT match_id)
-            FROM (
-                SELECT match_id
+            WITH player_scorecard_matches AS (
+                SELECT DISTINCT match_id, tournament_id
                 FROM nepal_batting_scorecards
                 WHERE batsman = %s
                   AND gender = %s
                   AND match_format IN ({format_placeholders})
                 UNION
-                SELECT match_id
+                SELECT DISTINCT match_id, tournament_id
                 FROM nepal_bowling_scorecards
                 WHERE bowler = %s
                   AND gender = %s
                   AND match_format IN ({format_placeholders})
-            ) AS scorecard_matches
+            )
+            SELECT match.tournament_id, match.match_id, match.match_date,
+                   match.match_format, match.team_1_name, match.team_2_name
+            FROM player_scorecard_matches AS appearance
+            JOIN nepal_matches AS match
+              ON match.match_id = appearance.match_id
+             AND match.tournament_id = appearance.tournament_id
+            ORDER BY match.tournament_id, match.match_date DESC, match.match_id DESC
             """,
             [
                 player["player_name"],
@@ -260,13 +266,39 @@ def get_nepal_player_profile(nepal_player_id: int) -> dict[str, Any] | None:
                 *NEPAL_PLAYER_FORMATS,
             ],
         )
-        recorded_scorecard_appearances = cursor.fetchone()[0]
+        recorded_matches = _rows_as_dicts(cursor)
+
+    matches_by_tournament: dict[int, list[dict[str, Any]]] = {}
+    appearances_by_format: dict[str, set[str]] = {}
+    for match in recorded_matches:
+        opponent = (
+            match["team_2_name"]
+            if match["team_1_name"] == "Nepal"
+            else match["team_1_name"]
+        )
+        appearances_by_format.setdefault(match["match_format"], set()).add(
+            match["match_id"]
+        )
+        matches_by_tournament.setdefault(match["tournament_id"], []).append(
+            {
+                "match_id": match["match_id"],
+                "match_date": match["match_date"],
+                "match_format": match["match_format"],
+                "opponent": opponent,
+            }
+        )
+    for participation in participations:
+        participation["matches"] = matches_by_tournament.get(
+            participation["tournament_id"], []
+        )
 
     player["participations"] = participations
-    player["recorded_scorecard_appearances"] = recorded_scorecard_appearances
     player["formats"] = [
         {
             "name": match_format,
+            "recorded_appearances": len(
+                appearances_by_format.get(match_format, set())
+            ),
             "batting": _nepal_batting_format_stats(
                 batting_by_format.get(match_format, [])
             ),

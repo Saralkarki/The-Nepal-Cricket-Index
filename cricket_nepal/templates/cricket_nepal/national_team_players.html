@@ -35,21 +35,12 @@
     </div>
 
     {% if players %}
-    <div class="player-directory-list">
+    <div class="player-directory-list national-player-list">
         {% for player in players %}
-        <article class="player-directory-row">
+        <article class="player-directory-row national-player-row">
             <div>
                 <h3><a href="{% url 'cricket_nepal:national_team_player_profile' player.nepal_player_id %}">{{ player.player_name }}</a></h3>
-                <p class="player-muted">{{ player.gender|title }}</p>
-                {% if player.participations %}
-                <ul class="player-participation-list">
-                    {% for participation in player.participations %}
-                    <li>{{ participation.tournament_name }}{% if participation.season %} · {{ participation.season }}{% endif %}</li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="player-muted">No tournament participation recorded.</p>
-                {% endif %}
+                <span class="national-player-gender">{{ player.gender|title }}</span>
             </div>
             <a class="player-open-link" href="{% url 'cricket_nepal:national_team_player_profile' player.nepal_player_id %}" aria-label="View {{ player.player_name }} profile">View profile <span aria-hidden="true">→</span></a>
         </article>

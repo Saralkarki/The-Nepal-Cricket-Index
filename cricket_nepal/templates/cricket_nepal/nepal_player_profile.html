@@ -17,31 +17,17 @@
             <p>{{ profile.gender|title }}</p>
         </div>
         <div>
-            <p class="player-info-label">Recorded scorecard appearances</p>
-            <p class="player-match-count">{{ profile.recorded_scorecard_appearances }}</p>
-            <span class="player-muted">Based on batting and bowling scorecards; not a definitive appearance total.</span>
+            <p class="player-info-label">Recorded appearances by format</p>
+            <dl class="player-appearance-counts">
+                {% for format_stats in profile.formats %}
+                <div>
+                    <dt>{{ format_stats.name }}</dt>
+                    <dd>{% if format_stats.recorded_appearances %}{{ format_stats.recorded_appearances }}{% else %}—{% endif %}</dd>
+                </div>
+                {% endfor %}
+            </dl>
+            <span class="player-muted">Provisional figures based on available scorecards; counts may be updated as data review and cleansing continue.</span>
         </div>
-    </section>
-
-    <section class="player-stats-section" aria-labelledby="national-participations-heading">
-        <div class="player-section-heading">
-            <div>
-                <p class="eyebrow section-eyebrow">Tournament records</p>
-                <h2 id="national-participations-heading">Tournament participation</h2>
-            </div>
-        </div>
-        {% if profile.participations %}
-        <ul class="profile-participations">
-            {% for participation in profile.participations %}
-            <li>
-                <strong>{{ participation.season|default:"Season unavailable" }}</strong>
-                <span>{{ participation.tournament_name }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="player-muted">No tournament participation recorded for ODI, T20I or T20 competitions.</p>
-        {% endif %}
     </section>
 
     {% for format_stats in profile.formats %}
@@ -91,5 +77,53 @@
         </div>
     </section>
     {% endfor %}
+
+    <section class="player-stats-section national-participation-section" aria-labelledby="national-participations-heading">
+        <details class="national-participation-details">
+            <summary>
+                <span>
+                    <span class="eyebrow section-eyebrow">Tournament records</span>
+                    <span class="national-participation-title" id="national-participations-heading">Tournament participation</span>
+                </span>
+                <span class="national-participation-count">{{ profile.participations|length }} tournament{{ profile.participations|length|pluralize }}</span>
+            </summary>
+            {% if profile.participations %}
+            <ul class="national-participation-list">
+                {% for participation in profile.participations %}
+                <li>
+                    <div class="national-tournament-card">
+                        <div class="national-tournament-heading">
+                            <h3>{{ participation.tournament_name }}</h3>
+                            <span>{{ participation.season|default:"Season unavailable" }}</span>
+                        </div>
+                        <details class="national-tournament-matches">
+                            <summary>
+                                <span>Recorded scorecard matches</span>
+                                <span>{{ participation.matches|length }} match{{ participation.matches|length|pluralize }}</span>
+                            </summary>
+                            {% if participation.matches %}
+                            <ul class="national-tournament-match-list">
+                                {% for match in participation.matches %}
+                                <li>
+                                    <a href="{% url 'cricket_nepal:nepal_match_detail' match.match_id %}">
+                                        <span>{{ match.match_date }} · vs {{ match.opponent }}</span>
+                                        <span>{{ match.match_format }}</span>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="player-muted national-tournament-empty">No scorecard appearances recorded for this tournament.</p>
+                            {% endif %}
+                        </details>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="player-muted">No tournament participation recorded for ODI, T20I or T20 competitions.</p>
+            {% endif %}
+        </details>
+    </section>
 </section>
 {% endblock %}

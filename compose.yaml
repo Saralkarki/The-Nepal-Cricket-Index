@@ -12,8 +12,8 @@ services:
       - "8000"
     volumes:
       - type: bind
-        source: /srv/nepal-cricket/nepal_cricket.db
-        target: /app/data/nepal_cricket.db
+        source: /srv/nepal-cricket/data
+        target: /app/data
         read_only: true
         bind:
           create_host_path: false

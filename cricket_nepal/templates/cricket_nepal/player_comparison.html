@@ -20,42 +20,13 @@
             <div>
                 <p class="eyebrow section-eyebrow">Choose players</p>
                 <h2 id="comparison-selection-title">Build your comparison</h2>
+                <p class="player-muted">Choose a team and season in each card to find a player and filter their comparison statistics.</p>
             </div>
         </div>
         <div class="comparison-player-strip" id="comparison-player-cards" aria-label="Player selections">
             <button type="button" id="comparison-add-player">Add Player</button>
         </div>
     </section>
-
-    <form class="comparison-filter-bar" id="comparison-filters" aria-label="Filter player comparison">
-        <label>
-            <span>Tournament</span>
-            <select name="tournament">
-                <option value="">All Tournaments</option>
-                {% for tournament in statistics.tournament_options %}
-                <option value="{{ tournament }}">{{ tournament }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label>
-            <span>Season</span>
-            <select name="season">
-                <option value="">All Seasons</option>
-                {% for season in statistics.season_options %}
-                <option value="{{ season }}">{{ season }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label>
-            <span>Team</span>
-            <select name="team">
-                <option value="">All Teams</option>
-                {% for team in statistics.team_options %}
-                <option value="{{ team }}">{{ team }}</option>
-                {% endfor %}
-            </select>
-        </label>
-    </form>
 
     <p class="comparison-status" id="comparison-status" role="status" aria-live="polite">
         Select players to compare their statistics.
@@ -93,9 +64,10 @@
                 </article>
             </div>
         </section>
-        <p class="comparison-radar-note">Radar metrics are normalized across the selected players. Missing statistics are omitted from that metric.</p>
+        <p class="comparison-radar-note">Radar metrics are normalized against players in each card's selected team and season. Different card filters use different comparison groups. Missing statistics are omitted.</p>
     </div>
 </section>
+{{ comparison_player_options|json_script:"comparison-player-options" }}
 {% endblock %}
 
 {% block extra_scripts %}

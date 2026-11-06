@@ -1819,6 +1819,7 @@ def get_player_statistics(
     bowling_sort: str = "wickets",
     player_ids: tuple[int, ...] | None = None,
     include_best_performances: bool = True,
+    match_scoped_stats: bool = False,
 ) -> dict[str, Any]:
     minimum_matches = max(0, minimum_matches)
     tournaments = get_tournaments()
@@ -1861,7 +1862,10 @@ def get_player_statistics(
         key=str.casefold,
     )
     if team_name not in display_team_options:
-        team_name = ""
+        team_name = next(
+            (name for name in _team_name_aliases(team_name) if name in display_team_options),
+            "",
+        ) if team_name else ""
     team_filter_names = _team_name_aliases(team_name) if team_name else ()
 
     batting_sort_options = {
@@ -1905,6 +1909,32 @@ def get_player_statistics(
         search_term,
         player_ids,
     )
+    if match_scoped_stats:
+        common_ctes += """
+        , scoped_batting_stats AS (
+            SELECT b.player_id, smp.tournament_id,
+                   COUNT(*) AS innings_played, SUM(b.runs) AS total_runs,
+                   SUM(b.is_out) AS times_out, SUM(b.balls_faced) AS total_balls_faced,
+                   SUM(b.fours) AS total_fours, SUM(b.sixes) AS total_sixes,
+                   SUM(b.dot_balls) AS total_dot_balls, MAX(b.runs) AS highest_score
+            FROM batting_scorecards AS b
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            GROUP BY b.player_id, smp.tournament_id
+        ),
+        scoped_bowling_stats AS (
+            SELECT b.player_id, smp.tournament_id,
+                   COUNT(*) AS innings_bowled, SUM(b.legal_balls_bowled) AS total_legal_balls,
+                   SUM(b.runs_conceded) AS runs_conceded, SUM(b.wickets) AS wickets,
+                   SUM(b.maidens) AS maidens, SUM(b.dot_balls) AS total_dot_balls
+            FROM bowling_scorecards AS b
+            JOIN scoped_match_players AS smp
+              ON smp.match_id = b.match_id AND smp.player_id = b.player_id
+            GROUP BY b.player_id, smp.tournament_id
+        )
+        """
+    batting_source = "scoped_batting_stats" if match_scoped_stats else "batting_stats_by_tournament"
+    bowling_source = "scoped_bowling_stats" if match_scoped_stats else "bowling_stats_by_tournament"
     batting_qualification = {
         "average": "average_qualified",
         "strike_rate": "strike_rate_qualified",
@@ -1939,7 +1969,7 @@ def get_player_statistics(
                        SUM(s.total_dot_balls) * 100.0
                            / NULLIF(SUM(s.total_balls_faced), 0)
                            AS dot_ball_percentage
-                FROM batting_stats_by_tournament AS s
+                FROM {batting_source} AS s
                 JOIN scoped_player_tournaments AS spt
                   ON spt.player_id = s.player_id
                  AND spt.tournament_id = s.tournament_id
@@ -2007,7 +2037,7 @@ def get_player_statistics(
                        SUM(s.total_dot_balls) * 100.0
                            / NULLIF(SUM(s.total_legal_balls), 0)
                            AS dot_ball_percentage
-                FROM bowling_stats_by_tournament AS s
+                FROM {bowling_source} AS s
                 JOIN scoped_player_tournaments AS spt
                   ON spt.player_id = s.player_id
                  AND spt.tournament_id = s.tournament_id
@@ -2307,6 +2337,26 @@ def _player_team_evidence_cte() -> str:
               ON p.cricsheet_player_id = match_players.cricsheet_player_id
         )
     """
+
+
+def get_npl_comparison_player_options() -> list[dict[str, Any]]:
+    with connections[CRICKET_DATABASE].cursor() as cursor:
+        cursor.execute(
+            _player_team_evidence_cte()
+            + """
+            SELECT DISTINCT p.player_id, p.player_name, t.season, pt.team_name
+            FROM player_teams AS pt
+            JOIN players AS p ON p.player_id = pt.player_id
+            JOIN tournaments AS t ON t.tournament_id = pt.tournament_id
+            WHERE t.tournament_name = %s
+            ORDER BY lower(p.player_name), p.player_id, t.season DESC, pt.team_name
+            """,
+            ["Nepal Premier League"],
+        )
+        rows = _rows_as_dicts(cursor)
+    for row in rows:
+        row["team_name"] = _canonical_team_name(row["team_name"])
+    return rows
 
 
 def get_player_directory(search_term: str = "") -> list[dict[str, Any]]:

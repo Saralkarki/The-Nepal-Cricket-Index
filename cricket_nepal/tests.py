@@ -2920,15 +2920,14 @@ class PlayerStatisticsPageTests(TestCase):
 
 
 class PlayerComparisonPageTests(TestCase):
-    def test_comparison_page_has_two_initial_cards_and_shared_filters(self):
+    def test_comparison_page_has_two_initial_cards_and_no_shared_filters(self):
         response = Client().get(reverse("cricket_nepal:player_comparison"))
         self.assertEqual(response.status_code, 200)
         rendered = response.content.decode()
         self.assertIn("Build your comparison", rendered)
         self.assertIn("Add Player", rendered)
-        self.assertIn("All Tournaments", rendered)
-        self.assertIn("All Seasons", rendered)
-        self.assertIn("All Teams", rendered)
+        self.assertNotIn('id="comparison-filters"', rendered)
+        self.assertIn("filter their comparison statistics", rendered)
         self.assertIn("player-comparison.js", rendered)
         script_path = (
             Path(__file__).parent
@@ -2939,6 +2938,9 @@ class PlayerComparisonPageTests(TestCase):
         )
         script = script_path.read_text()
         self.assertIn("addCard();\n    addCard();", script)
+        self.assertIn('addSelector("NPL team"', script)
+        self.assertIn('addSelector("Season"', script)
+        self.assertIn('addSelector("Player"', script)
 
     def test_player_search_returns_profile_links(self):
         players = get_player_statistics(minimum_matches=0)["batting"]
@@ -2957,6 +2959,125 @@ class PlayerComparisonPageTests(TestCase):
                 for player in matches
             )
         )
+
+    def test_comparison_card_options_use_npl_team_season_participation(self):
+        response = Client().get(reverse("cricket_nepal:player_comparison"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="comparison-player-options"', response.content.decode())
+        options = response.context["comparison_player_options"]
+        self.assertTrue(options)
+        self.assertTrue(
+            all(
+                row["player_id"] and row["player_name"] and row["team_name"]
+                and row["season"] and row["profile_url"]
+                for row in options
+            )
+        )
+        with sqlite3.connect(Path(__file__).parent.parent / "data" / "nepal_cricket.db") as connection:
+            expected = connection.execute(
+                """
+                SELECT DISTINCT p.player_id, t.season, mp.team_name
+                FROM match_players AS mp
+                JOIN players AS p ON p.cricsheet_player_id = mp.cricsheet_player_id
+                JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
+                WHERE t.tournament_name = 'Nepal Premier League'
+                """
+            ).fetchall()
+        aliases = {"Kathmandu Gurkhas": "Kathmandu Gorkhas"}
+        self.assertEqual(
+            {(row["player_id"], row["season"], row["team_name"]) for row in options},
+            {(player, season, aliases.get(team, team)) for player, season, team in expected},
+        )
+
+    def test_comparison_card_scope_uses_only_selected_team_and_season_matches(self):
+        database_path = Path(__file__).parent.parent / "data" / "nepal_cricket.db"
+        with sqlite3.connect(database_path) as connection:
+            player_id, season, team = connection.execute(
+                """
+                SELECT p.player_id, t.season, mp.team_name
+                FROM batting_scorecards AS b
+                JOIN players AS p ON p.player_id = b.player_id
+                JOIN match_players AS mp
+                  ON mp.match_id = b.match_id
+                 AND mp.cricsheet_player_id = p.cricsheet_player_id
+                JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
+                WHERE t.tournament_name = 'Nepal Premier League'
+                ORDER BY t.season DESC, p.player_id
+                LIMIT 1
+                """
+            ).fetchone()
+            expected = connection.execute(
+                """
+                SELECT SUM(b.runs), SUM(b.balls_faced), SUM(b.dot_balls)
+                FROM batting_scorecards AS b
+                JOIN players AS p ON p.player_id = b.player_id
+                JOIN match_players AS mp
+                  ON mp.match_id = b.match_id
+                 AND mp.cricsheet_player_id = p.cricsheet_player_id
+                JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
+                WHERE p.player_id = ? AND t.season = ? AND mp.team_name = ?
+                  AND t.tournament_name = 'Nepal Premier League'
+                """,
+                (player_id, season, team),
+            ).fetchone()
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {
+                "player": player_id,
+                "tournament": "Nepal Premier League",
+                "season": season,
+                "team": team,
+                "scope": "matches",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        batting = response.json()["players"][0]["batting"]
+        self.assertEqual((batting["runs"], batting["balls_faced"], batting["dot_balls"]), expected)
+
+    def test_comparison_card_bowling_scope_uses_matching_scorecards(self):
+        database_path = Path(__file__).parent.parent / "data" / "nepal_cricket.db"
+        with sqlite3.connect(database_path) as connection:
+            player_id, season, team = connection.execute(
+                """
+                SELECT p.player_id, t.season, mp.team_name
+                FROM bowling_scorecards AS b
+                JOIN players AS p ON p.player_id = b.player_id
+                JOIN match_players AS mp
+                  ON mp.match_id = b.match_id
+                 AND mp.cricsheet_player_id = p.cricsheet_player_id
+                JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
+                WHERE t.tournament_name = 'Nepal Premier League'
+                ORDER BY t.season DESC, p.player_id
+                LIMIT 1
+                """
+            ).fetchone()
+            expected = connection.execute(
+                """
+                SELECT SUM(b.wickets), SUM(b.legal_balls_bowled), SUM(b.dot_balls)
+                FROM bowling_scorecards AS b
+                JOIN players AS p ON p.player_id = b.player_id
+                JOIN match_players AS mp
+                  ON mp.match_id = b.match_id
+                 AND mp.cricsheet_player_id = p.cricsheet_player_id
+                JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
+                WHERE p.player_id = ? AND t.season = ? AND mp.team_name = ?
+                  AND t.tournament_name = 'Nepal Premier League'
+                """,
+                (player_id, season, team),
+            ).fetchone()
+        response = Client().get(
+            reverse("cricket_nepal:player_comparison_data"),
+            {
+                "player": player_id,
+                "tournament": "Nepal Premier League",
+                "season": season,
+                "team": team,
+                "scope": "matches",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        bowling = response.json()["players"][0]["bowling"]
+        self.assertEqual((bowling["wickets"], bowling["legal_balls"], bowling["dot_balls"]), expected)
 
     def test_comparison_accepts_multiple_players_and_deduplicates_ids(self):
         statistics = get_player_statistics(minimum_matches=0)

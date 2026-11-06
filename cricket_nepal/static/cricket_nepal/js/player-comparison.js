@@ -6,9 +6,9 @@
 
     const cardsContainer = root.querySelector("#comparison-player-cards");
     const addPlayerButton = root.querySelector("#comparison-add-player");
-    const filters = root.querySelector("#comparison-filters");
     const status = root.querySelector("#comparison-status");
     const results = root.querySelector("#comparison-results");
+    const playerOptions = JSON.parse(document.getElementById("comparison-player-options").textContent);
     const cards = [];
     let cardSequence = 0;
     let dataRequest;
@@ -71,6 +71,49 @@
             .map((card) => card.player.player_id);
     }
 
+    function setOptions(select, values, placeholder) {
+        const selected = select.value;
+        select.replaceChildren(new Option(placeholder, ""));
+        for (const [value, label] of values) {
+            select.add(new Option(label, value));
+        }
+        select.value = values.some(([value]) => value === selected) ? selected : "";
+    }
+
+    function refreshCardOptions(card) {
+        const team = card.team.value;
+        const season = card.season.value;
+        const excluded = new Set(selectedIds(card));
+        const eligible = playerOptions.filter(
+            (player) => (!team || player.team_name === team)
+                && (!season || player.season === season)
+                && !excluded.has(player.player_id),
+        );
+        const uniquePlayers = new Map(eligible.map((player) => [player.player_id, player]));
+        card.availablePlayers = uniquePlayers;
+        setOptions(
+            card.playerSelect,
+            [...uniquePlayers.values()].map((player) => [String(player.player_id), player.player_name]),
+            uniquePlayers.size ? "Choose a player" : "No available players",
+        );
+        card.playerSelect.disabled = uniquePlayers.size === 0;
+    }
+
+    function selectPlayer(card, player) {
+        if (selectedIds(card).includes(player.player_id)) {
+            status.textContent = `${player.player_name} is already selected.`;
+            refreshCardOptions(card);
+            return;
+        }
+        card.player = player;
+        card.playerSelect.value = "";
+        card.input.value = "";
+        card.suggestions.replaceChildren();
+        renderCard(card);
+        cards.forEach(refreshCardOptions);
+        updateComparison();
+    }
+
     function addCard() {
         const card = { player: null, request: null, timer: null };
         cardSequence += 1;
@@ -78,8 +121,47 @@
         card.heading = element("span", "comparison-player-card-number", `Player ${cardSequence}`);
         card.element.append(card.heading);
 
+        card.chooser = element("div", "comparison-player-chooser");
+        function addSelector(label, placeholder) {
+            const wrapper = element("label", "comparison-card-filter");
+            wrapper.append(element("span", "", label));
+            const select = element("select");
+            select.setAttribute("aria-label", `${label} for player ${cardSequence}`);
+            select.add(new Option(placeholder, ""));
+            wrapper.append(select);
+            card.chooser.append(wrapper);
+            return select;
+        }
+        card.team = addSelector("NPL team", "All NPL teams");
+        card.season = addSelector("Season", "All seasons");
+        card.playerSelect = addSelector("Player", "Choose a player");
+        const teams = [...new Set(playerOptions.map((player) => player.team_name))]
+            .sort((a, b) => a.localeCompare(b));
+        const seasons = [...new Set(playerOptions.map((player) => player.season))]
+            .sort((a, b) => b.localeCompare(a));
+        setOptions(card.team, teams.map((team) => [team, team]), "All NPL teams");
+        setOptions(card.season, seasons.map((season) => [season, season]), "All seasons");
+        function changeScope() {
+            card.request?.abort();
+            window.clearTimeout(card.timer);
+            card.suggestions.replaceChildren();
+            card.input.setAttribute("aria-expanded", "false");
+            refreshCardOptions(card);
+            if (card.input.value.trim().length >= 2) {
+                searchForPlayers(card);
+            }
+        }
+        card.team.addEventListener("change", changeScope);
+        card.season.addEventListener("change", changeScope);
+        card.playerSelect.addEventListener("change", () => {
+            const player = card.availablePlayers.get(Number(card.playerSelect.value));
+            if (player) {
+                selectPlayer(card, player);
+            }
+        });
+
         card.searchLabel = element("label", "comparison-player-search");
-        card.searchLabel.append(element("span", "", "Search for a player"));
+        card.searchLabel.append(element("span", "", "Or search by name"));
         card.input = element("input");
         card.input.type = "search";
         card.input.autocomplete = "off";
@@ -90,7 +172,12 @@
         card.suggestions = element("ul", "comparison-player-suggestions");
         card.suggestions.setAttribute("role", "listbox");
         card.searchLabel.append(card.suggestions);
-        card.element.append(card.searchLabel);
+        card.chooser.append(card.searchLabel);
+        const removeEmptyButton = element("button", "comparison-remove-empty", "Remove card");
+        removeEmptyButton.type = "button";
+        removeEmptyButton.addEventListener("click", () => removeCard(card));
+        card.chooser.append(removeEmptyButton);
+        card.element.append(card.chooser);
 
         card.selected = element("div", "comparison-selected-player");
         card.element.append(card.selected);
@@ -105,12 +192,13 @@
 
         cardsContainer.insertBefore(card.element, addPlayerButton);
         cards.push(card);
+        refreshCardOptions(card);
         renderCard(card);
     }
 
     function renderCard(card) {
         card.heading.textContent = `Player ${cards.indexOf(card) + 1}`;
-        card.searchLabel.hidden = Boolean(card.player);
+        card.chooser.hidden = Boolean(card.player);
         card.selected.replaceChildren();
         if (!card.player) {
             return;
@@ -131,6 +219,11 @@
         const nameLink = element("a", "comparison-player-name", card.player.player_name);
         nameLink.href = card.player.profile_url;
         identity.append(nameLink);
+        identity.append(element(
+            "span",
+            "comparison-player-scope",
+            `${card.team.value || "All NPL teams"} · ${card.season.value || "All seasons"}`,
+        ));
 
         const controls = element("div", "comparison-player-card-actions");
         const changeButton = element("button", "", "Change");
@@ -139,6 +232,7 @@
             card.player = null;
             card.input.value = "";
             renderCard(card);
+            cards.forEach(refreshCardOptions);
             card.input.focus();
             updateComparison();
         });
@@ -176,8 +270,9 @@
                 return;
             }
             const excluded = new Set(selectedIds(card));
+            const available = card.availablePlayers;
             const matches = payload.players.filter(
-                (player) => !excluded.has(player.player_id),
+                (player) => !excluded.has(player.player_id) && available.has(player.player_id),
             );
             if (matches.length === 0) {
                 card.suggestions.append(
@@ -190,15 +285,7 @@
                 option.type = "button";
                 option.setAttribute("role", "option");
                 option.addEventListener("click", () => {
-                    if (selectedIds(card).includes(player.player_id)) {
-                        status.textContent = `${player.player_name} is already selected.`;
-                        return;
-                    }
-                    card.player = player;
-                    card.input.value = "";
-                    card.suggestions.replaceChildren();
-                    renderCard(card);
-                    updateComparison();
+                    selectPlayer(card, player);
                 });
                 item.append(option);
                 card.suggestions.append(item);
@@ -220,6 +307,7 @@
         card.element.remove();
         cards.splice(cards.indexOf(card), 1);
         cards.forEach(renderCard);
+        cards.forEach(refreshCardOptions);
         updateComparison();
     }
 
@@ -423,78 +511,50 @@
         container.append(svg, legend);
     }
 
-    function updateFilterOptions(select, values, selected, allLabel) {
-        const currentValue = selected ?? "";
-        select.replaceChildren(new Option(allLabel, ""));
-        for (const value of values) {
-            select.add(new Option(value, value));
-        }
-        select.value = currentValue;
-    }
-
-    function updateFilters(filterData) {
-        updateFilterOptions(
-            filters.elements.tournament,
-            filterData.tournament_options,
-            filterData.selected_tournament,
-            "All Tournaments",
-        );
-        updateFilterOptions(
-            filters.elements.season,
-            filterData.season_options,
-            filterData.selected_season,
-            "All Seasons",
-        );
-        updateFilterOptions(
-            filters.elements.team,
-            filterData.team_options,
-            filterData.selected_team,
-            "All Teams",
-        );
-    }
-
     async function updateComparison() {
-        const playerIds = cards
-            .filter((card) => card.player)
-            .map((card) => card.player.player_id);
+        const selectedCards = cards.filter((card) => card.player);
         if (dataRequest) {
             dataRequest.abort();
         }
         dataRequest = new AbortController();
-        const url = new URL(root.dataset.comparisonDataUrl, window.location.href);
-        for (const playerId of playerIds) {
-            url.searchParams.append("player", playerId);
-        }
-        url.searchParams.set("tournament", filters.elements.tournament.value);
-        url.searchParams.set("season", filters.elements.season.value);
-        url.searchParams.set("team", filters.elements.team.value);
-
-        status.textContent = playerIds.length
+        status.textContent = selectedCards.length
             ? "Loading comparison data…"
             : "Select players to compare their statistics.";
         results.hidden = true;
         try {
-            const response = await fetch(url, { signal: dataRequest.signal });
-            const payload = await response.json();
-            if (!response.ok) {
-                throw new Error(payload.error || "Comparison data is unavailable.");
-            }
-            updateFilters(payload.filters);
-            if (payload.players.length === 0) {
+            if (selectedCards.length === 0) {
                 status.textContent = "Select players to compare their statistics.";
                 return;
             }
-            renderTable("batting", battingMetrics, payload.players);
-            renderTable("bowling", bowlingMetrics, payload.players);
-            renderChart("batting", payload.players);
-            renderChart("bowling", payload.players);
+            const signal = dataRequest.signal;
+            const players = await Promise.all(selectedCards.map(async (card) => {
+                const url = new URL(root.dataset.comparisonDataUrl, window.location.href);
+                url.searchParams.set("player", card.player.player_id);
+                url.searchParams.set("tournament", "Nepal Premier League");
+                url.searchParams.set("team", card.team.value);
+                url.searchParams.set("season", card.season.value);
+                url.searchParams.set("scope", "matches");
+                const response = await fetch(url, { signal });
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.error || "Comparison data is unavailable.");
+                }
+                return payload.players[0];
+            }));
+            if (signal.aborted) {
+                return;
+            }
+            renderTable("batting", battingMetrics, players);
+            renderTable("bowling", bowlingMetrics, players);
+            renderChart("batting", players);
+            renderChart("bowling", players);
             results.hidden = false;
-            const missing = payload.players.filter(
+            const missing = players.filter(
                 (player) => !player.batting && !player.bowling,
             );
             status.textContent = missing.length
-                ? `${payload.players.length} players selected. ${missing.map((player) => player.player_name).join(", ")} have no records for this selection.`
-                : `${payload.players.length} players compared.`;
+                ? `${players.length} players selected. ${missing.map((player) => player.player_name).join(", ")} have no records for this selection.`
+                : `${players.length} players compared.`;
         } catch (error) {
             if (error.name !== "AbortError") {
                 status.textContent = error.message || "Could not load comparison data.";
@@ -505,15 +565,6 @@
     addPlayerButton.addEventListener("click", () => {
         addCard();
         cards[cards.length - 1].input.focus();
-    });
-
-    filters.addEventListener("submit", (event) => {
-        event.preventDefault();
-        updateComparison();
-    });
-    filters.addEventListener("change", updateComparison);
-    filters.addEventListener("reset", () => {
-        window.setTimeout(updateComparison, 0);
     });
 
     addPlayerButton.className = "comparison-add-player-card";

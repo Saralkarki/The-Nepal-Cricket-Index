@@ -1951,7 +1951,7 @@ summary:focus-visible {
 .comparison-player-card {
     position: relative;
     display: flex;
-    flex: 0 0 190px;
+    flex: 0 0 220px;
     min-height: 92px;
     align-items: center;
     gap: 10px;
@@ -1994,6 +1994,11 @@ summary:focus-visible {
     font-weight: 750;
     text-decoration: none;
     text-overflow: ellipsis;
+}
+
+.comparison-player-scope {
+    color: var(--ink-soft);
+    font-size: 10px;
 }
 
 .comparison-player-card-actions {
@@ -2064,12 +2069,9 @@ summary:focus-visible {
 }
 
 .comparison-player-search {
-    position: absolute;
-    inset: 0;
+    position: relative;
     display: grid;
-    align-content: center;
-    gap: 7px;
-    padding: 12px 10px;
+    gap: 4px;
     color: var(--ink-soft);
     font-size: 9px;
     font-weight: 650;
@@ -2077,6 +2079,23 @@ summary:focus-visible {
 
 .comparison-player-search[hidden] { display: none; }
 
+.comparison-player-chooser {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+}
+
+.comparison-player-chooser[hidden] { display: none; }
+
+.comparison-card-filter {
+    display: grid;
+    gap: 4px;
+    color: var(--ink-soft);
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.comparison-card-filter select,
 .comparison-player-search input {
     width: 100%;
     min-height: 34px;
@@ -2091,9 +2110,9 @@ summary:focus-visible {
 .comparison-player-suggestions {
     position: absolute;
     z-index: 4;
-    top: calc(100% - 24px);
-    right: 8px;
-    left: 8px;
+    top: 100%;
+    right: 0;
+    left: 0;
     max-height: 180px;
     overflow-y: auto;
     margin: 0;
@@ -2126,10 +2145,21 @@ summary:focus-visible {
 }
 
 .comparison-selected-player { display: contents; }
-.comparison-player-card:has(.comparison-player-search:not([hidden])) { display: block; }
-.comparison-player-card:has(.comparison-player-search:not([hidden])) .comparison-player-card-number,
-.comparison-player-card:has(.comparison-player-search:not([hidden])) .comparison-selected-player,
-.comparison-player-card:has(.comparison-player-search[hidden]) .comparison-player-search { display: none; }
+.comparison-player-card:has(.comparison-player-chooser:not([hidden])) { display: block; }
+.comparison-player-card:has(.comparison-player-chooser:not([hidden])) .comparison-player-card-number,
+.comparison-player-card:has(.comparison-player-chooser:not([hidden])) .comparison-selected-player { display: none; }
+
+.comparison-remove-empty {
+    justify-self: start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 10px;
+    text-decoration: underline;
+    cursor: pointer;
+}
 
 .comparison-filter-bar {
     display: grid;
@@ -2165,6 +2195,7 @@ summary:focus-visible {
 }
 
 .comparison-filter-bar select:focus-visible,
+.comparison-card-filter select:focus-visible,
 .comparison-player-search input:focus-visible,
 .comparison-add-player-card:focus-visible,
 .comparison-player-option:focus-visible {

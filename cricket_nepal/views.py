@@ -8,6 +8,7 @@ from cricket_nepal.data_access import (
     get_npl_team_directory,
     get_team_profile,
     get_player_directory,
+    get_npl_comparison_player_options,
     get_player_names,
     get_player_statistics,
     get_player_match_performance,
@@ -569,18 +570,18 @@ def player_statistics_compare(request):
 
 
 def player_comparison(request):
-    statistics = get_player_statistics(
-        minimum_matches=0,
-        player_ids=(),
-        include_best_performances=False,
-    )
+    player_options = get_npl_comparison_player_options()
+    for player in player_options:
+        player["profile_url"] = reverse(
+            "cricket_nepal:player_profile", args=[player["player_id"]]
+        )
     return render(
         request,
         "cricket_nepal/player_comparison.html",
         {
-            "statistics": statistics,
             "comparison_data_url": reverse("cricket_nepal:player_comparison_data"),
             "player_search_url": reverse("cricket_nepal:player_comparison_search"),
+            "comparison_player_options": player_options,
         },
     )
 
@@ -623,6 +624,7 @@ def player_comparison_data(request):
         minimum_matches=0,
         player_ids=None if player_ids else (),
         include_best_performances=False,
+        match_scoped_stats=request.GET.get("scope") == "matches",
     )
     batting_rows = {row["player_id"]: row for row in statistics["batting"]}
     bowling_rows = {row["player_id"]: row for row in statistics["bowling"]}

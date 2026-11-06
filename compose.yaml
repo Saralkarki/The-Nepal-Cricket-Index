@@ -10,10 +10,3 @@ services:
       DJANGO_DEBUG: "false"
     expose:
       - "8000"
-    volumes:
-      - type: bind
-        source: ${CRICKET_DB_PATH:?Set CRICKET_DB_PATH to the database file}
-        target: /app/data/nepal_cricket.db
-        read_only: true
-        bind:
-          create_host_path: false

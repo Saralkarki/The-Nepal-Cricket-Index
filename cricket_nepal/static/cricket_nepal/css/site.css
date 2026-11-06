@@ -2352,6 +2352,29 @@ summary:focus-visible {
 
 .comparison-chart { min-width: 0; padding: 4px; }
 
+.comparison-chart-enlarge {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #355a84;
+    font: inherit;
+    cursor: zoom-in;
+}
+
+.comparison-chart-enlarge:focus-visible,
+.comparison-radar-dialog button:focus-visible {
+    outline: 2px solid #356ab2;
+    outline-offset: 2px;
+}
+
+.comparison-chart-enlarge-label {
+    display: block;
+    font-size: 10px;
+    text-align: center;
+}
+
 .comparison-chart svg {
     display: block;
     width: min(100%, 240px);
@@ -2399,6 +2422,47 @@ summary:focus-visible {
 }
 
 .comparison-chart-legend a:hover { color: #356ab2; text-decoration: underline; }
+
+.comparison-radar-dialog {
+    width: min(94vw, 820px);
+    max-height: 90vh;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--white);
+    color: var(--ink);
+}
+
+.comparison-radar-dialog::backdrop {
+    background: rgb(0 0 0 / 65%);
+}
+
+.comparison-radar-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.comparison-radar-dialog-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.comparison-radar-dialog-header button {
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    background: var(--white);
+    color: var(--navy);
+    font: inherit;
+    cursor: pointer;
+}
+
+.comparison-radar-enlarged svg { width: min(100%, 700px); }
+.comparison-radar-enlarged .comparison-chart-legend { max-height: none; gap: 8px 16px; }
+.comparison-radar-enlarged .comparison-chart-legend li,
+.comparison-radar-enlarged .comparison-chart-legend a { max-width: none; font-size: 12px; }
+.comparison-radar-enlarged .comparison-legend-swatch { width: 10px; height: 10px; }
 
 .comparison-legend-swatch {
     width: 6px;

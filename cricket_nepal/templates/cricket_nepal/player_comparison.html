@@ -66,6 +66,14 @@
         </section>
         <p class="comparison-radar-note">Radar metrics are normalized against players in each card's selected team and season. Different card filters use different comparison groups. Missing statistics are omitted.</p>
     </div>
+    <dialog class="comparison-radar-dialog" id="comparison-radar-dialog" aria-labelledby="comparison-radar-dialog-title">
+        <div class="comparison-radar-dialog-header">
+            <h2 id="comparison-radar-dialog-title"></h2>
+            <button type="button" id="comparison-radar-close" aria-label="Close enlarged radar chart">Close</button>
+        </div>
+        <div class="comparison-chart comparison-radar-enlarged" id="comparison-radar-enlarged"></div>
+        <p class="comparison-radar-note">Radar metrics are normalized against players in each card's selected team and season. Different card filters use different comparison groups.</p>
+    </dialog>
 </section>
 {{ comparison_player_options|json_script:"comparison-player-options" }}
 {% endblock %}

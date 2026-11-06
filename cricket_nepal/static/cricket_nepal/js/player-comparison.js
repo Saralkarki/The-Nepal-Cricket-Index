@@ -8,6 +8,9 @@
     const addPlayerButton = root.querySelector("#comparison-add-player");
     const status = root.querySelector("#comparison-status");
     const results = root.querySelector("#comparison-results");
+    const radarDialog = root.querySelector("#comparison-radar-dialog");
+    const radarDialogTitle = root.querySelector("#comparison-radar-dialog-title");
+    const radarEnlarged = root.querySelector("#comparison-radar-enlarged");
     const playerOptions = JSON.parse(document.getElementById("comparison-player-options").textContent);
     const cards = [];
     let cardSequence = 0;
@@ -508,10 +511,23 @@
             legend.append(item);
         });
 
-        container.append(svg, legend);
+        const enlargeButton = element("button", "comparison-chart-enlarge");
+        enlargeButton.type = "button";
+        const label = `${kind === "batting" ? "Batting" : "Bowling"} radar comparison`;
+        enlargeButton.setAttribute("aria-label", `Enlarge ${label}`);
+        enlargeButton.append(svg, element("span", "comparison-chart-enlarge-label", "Click to enlarge"));
+        enlargeButton.addEventListener("click", () => {
+            radarDialogTitle.textContent = label;
+            radarEnlarged.replaceChildren(svg.cloneNode(true), legend.cloneNode(true));
+            radarDialog.showModal();
+        });
+        container.append(enlargeButton, legend);
     }
 
     async function updateComparison() {
+        if (radarDialog.open) {
+            radarDialog.close();
+        }
         const selectedCards = cards.filter((card) => card.player);
         if (dataRequest) {
             dataRequest.abort();
@@ -565,6 +581,9 @@
     addPlayerButton.addEventListener("click", () => {
         addCard();
         cards[cards.length - 1].input.focus();
+    });
+    root.querySelector("#comparison-radar-close").addEventListener("click", () => {
+        radarDialog.close();
     });
 
     addPlayerButton.className = "comparison-add-player-card";

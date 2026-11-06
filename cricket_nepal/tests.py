@@ -2920,6 +2920,14 @@ class PlayerStatisticsPageTests(TestCase):
 
 
 class PlayerComparisonPageTests(TestCase):
+    def test_comparison_page_has_accessible_radar_dialog(self):
+        response = Client().get(reverse("cricket_nepal:player_comparison"))
+        rendered = response.content.decode()
+        self.assertIn('<dialog class="comparison-radar-dialog"', rendered)
+        self.assertIn('aria-labelledby="comparison-radar-dialog-title"', rendered)
+        self.assertIn('aria-label="Close enlarged radar chart"', rendered)
+        self.assertIn('id="comparison-radar-enlarged"', rendered)
+
     def test_comparison_page_has_two_initial_cards_and_no_shared_filters(self):
         response = Client().get(reverse("cricket_nepal:player_comparison"))
         self.assertEqual(response.status_code, 200)

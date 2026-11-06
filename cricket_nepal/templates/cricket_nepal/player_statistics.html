@@ -1,6 +1,6 @@
 {% extends "cricket_nepal/base.html" %}
 
-{% block title %}{% if statistics_view == "bowling" %}Bowling Statistics{% else %}Batting Statistics{% endif %} · Nepal Cricket Dataset{% endblock %}
+{% block title %}{% if statistics_view == "bowling" %}Bowling Statistics{% else %}Batting Statistics{% endif %} · The-Nepal-Cricket-Index{% endblock %}
 
 {% block content %}
 <section class="page-section player-statistics-page">
@@ -11,9 +11,9 @@
         <h1>{% if statistics_view == "bowling" %}Bowling Statistics{% else %}Batting Statistics{% endif %}</h1>
         <p class="section-intro">
             {% if statistics_view == "bowling" %}
-            Compare bowling performances across the competitions and seasons in the Nepal Cricket Dataset.
+            Compare bowling performances across the competitions and seasons in The-Nepal-Cricket-Index.
             {% else %}
-            Compare batting performances across the competitions and seasons in the Nepal Cricket Dataset.
+            Compare batting performances across the competitions and seasons in The-Nepal-Cricket-Index.
             {% endif %}
         </p>
     </header>

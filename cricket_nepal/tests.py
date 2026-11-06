@@ -171,7 +171,9 @@ class HomepageTests(SimpleTestCase):
             response = self.client.get(reverse("cricket_nepal:home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Nepal Cricket Dataset")
+        self.assertContains(response, "The-Nepal-Cricket-Index")
+        self.assertContains(response, 'aria-label="The-Nepal-Cricket-Index home"')
+        self.assertContains(response, '<span class="brand-name">The-Nepal-Cricket-Index</span>')
         npl_query.assert_not_called()
         self.assertContains(response, "Choose a competition")
         self.assertContains(response, "Nepal Premier League")

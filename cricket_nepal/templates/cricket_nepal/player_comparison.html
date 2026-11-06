@@ -44,6 +44,7 @@
                 </div>
                 <article class="comparison-chart-panel">
                     <h3>Batting Radar</h3>
+                    <p class="comparison-radar-key">↑ higher is better · ↓ lower is better</p>
                     <div class="comparison-chart" id="comparison-batting-chart"></div>
                 </article>
             </div>
@@ -60,6 +61,7 @@
                 </div>
                 <article class="comparison-chart-panel">
                     <h3>Bowling Radar</h3>
+                    <p class="comparison-radar-key">↑ higher is better · ↓ lower is better</p>
                     <div class="comparison-chart" id="comparison-bowling-chart"></div>
                 </article>
             </div>
@@ -71,6 +73,7 @@
             <h2 id="comparison-radar-dialog-title"></h2>
             <button type="button" id="comparison-radar-close" aria-label="Close enlarged radar chart">Close</button>
         </div>
+        <p class="comparison-radar-key">↑ higher is better · ↓ lower is better</p>
         <div class="comparison-chart comparison-radar-enlarged" id="comparison-radar-enlarged"></div>
         <p class="comparison-radar-note">Radar metrics are normalized against players in each card's selected team and season. Different card filters use different comparison groups.</p>
     </dialog>
@@ -79,5 +82,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'cricket_nepal/js/player-comparison.js' %}" defer></script>
+<script src="{% static 'cricket_nepal/js/player-comparison.js' %}?v=direction-arrows" defer></script>
 {% endblock %}

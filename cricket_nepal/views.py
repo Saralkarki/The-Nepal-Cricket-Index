@@ -45,7 +45,7 @@ BOWLER_RADAR_AXES = (
     ("Bowling Strike Rate", "strike_rate", False, ""),
     ("Economy", "economy", False, ""),
     ("Maidens", "maidens", True, ""),
-    ("Dot-ball %", "dot_ball_percentage", False, "%"),
+    ("Dot-ball %", "dot_ball_percentage", True, "%"),
 )
 
 FIELDING_SORT_OPTIONS = (
@@ -103,6 +103,7 @@ def _build_radar_chart(
         axes.append(
             {
                 "label": label,
+                "higher_is_better": higher_is_better,
                 "value": value,
                 "normalized": normalized,
                 "actual": actual,

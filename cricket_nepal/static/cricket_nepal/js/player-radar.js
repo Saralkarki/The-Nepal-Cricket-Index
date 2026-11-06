@@ -89,7 +89,7 @@
                         ? "hanging"
                         : "middle",
             });
-            label.textContent = axis.label;
+            label.textContent = `${axis.label} ${axis.higher_is_better ? "↑" : "↓"}`;
             const tooltip = createSvgElement("title");
             tooltip.textContent = axis.tooltip;
             label.append(tooltip);

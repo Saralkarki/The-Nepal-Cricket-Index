@@ -2350,6 +2350,13 @@ summary:focus-visible {
 
 .comparison-stat-panel:nth-child(2) .comparison-chart-panel h3::before { content: "◉"; }
 
+.comparison-radar-key {
+    margin: 8px 8px 0;
+    color: var(--ink-soft);
+    font-size: 10px;
+    text-align: center;
+}
+
 .comparison-chart { min-width: 0; padding: 4px; }
 
 .comparison-chart-enlarge {

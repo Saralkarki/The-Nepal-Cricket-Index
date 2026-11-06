@@ -945,7 +945,16 @@ class AboutPageTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Prepared Parquet exports")
         self.assertContains(response, "Cricsheet player identifiers")
-        self.assertContains(response, "licensing details are still being confirmed")
+        self.assertContains(response, 'href="https://cricsheet.org/licensing/"')
+        self.assertContains(response, "Open Data Commons Attribution")
+        self.assertContains(response, "Creative Commons Attribution 4.0")
+        self.assertContains(response, "prepared, transformed and aggregated")
+        self.assertContains(response, "no matches against Afghanistan")
+        self.assertContains(
+            response,
+            'href="https://cricsheet.org/article/explanation-for-withholding-of-afghanistani-matches/"',
+        )
+        self.assertContains(response, "We support Cricsheet")
         self.assertContains(response, "Howzat Analytics")
 
     def test_about_page_describes_consulting_work_and_links_to_company(self):
@@ -2374,8 +2383,17 @@ class PlayerProfileTests(SimpleTestCase):
         )
         self.assertEqual(
             [axis["normalized"] for axis in bowling["axes"]],
-            [100, 0, 100, 0, 100],
+            [100, 0, 100, 0, 0],
         )
+        self.assertTrue(bowling["axes"][4]["higher_is_better"])
+        self.assertEqual(bowling["axes"][4]["value"], 20.0)
+        from cricket_nepal.views import BOWLER_RADAR_AXES, _build_radar_chart
+
+        higher_dot_chart = _build_radar_chart(
+            cohort["bowling"], 26, BOWLER_RADAR_AXES, "2024/25"
+        )
+        self.assertEqual(higher_dot_chart["axes"][4]["value"], 50.0)
+        self.assertEqual(higher_dot_chart["axes"][4]["normalized"], 100)
         self.assertEqual(batting["axes"][0]["tooltip"], "Total runs: 100")
         self.assertEqual(batting["axes"][1]["label"], "Strike Rate")
         self.assertEqual(batting["axes"][1]["value"], 100.0)
@@ -2388,6 +2406,11 @@ class PlayerProfileTests(SimpleTestCase):
         self.assertEqual(batting["season_label"], "2024/25")
         self.assertContains(response, "batting-radar-data")
         self.assertContains(response, "bowling-radar-data")
+        self.assertContains(response, "↑ higher is better · ↓ lower is better")
+        self.assertContains(response, "<span>Dot-ball % ↓</span>")
+        self.assertContains(response, "<span>Dot-ball % ↑</span>")
+        self.assertContains(response, "<span>Economy ↓</span>")
+        self.assertContains(response, "player-radar.js?v=direction-arrows")
         self.assertContains(response, '<option value="">Overall</option>')
         self.assertContains(response, "Total runs: 100")
         self.assertContains(response, "Economy: 6")
@@ -2927,6 +2950,7 @@ class PlayerComparisonPageTests(TestCase):
         self.assertIn('aria-labelledby="comparison-radar-dialog-title"', rendered)
         self.assertIn('aria-label="Close enlarged radar chart"', rendered)
         self.assertIn('id="comparison-radar-enlarged"', rendered)
+        self.assertEqual(rendered.count("↑ higher is better · ↓ lower is better"), 3)
 
     def test_comparison_page_has_two_initial_cards_and_no_shared_filters(self):
         response = Client().get(reverse("cricket_nepal:player_comparison"))
@@ -3151,6 +3175,17 @@ class PlayerComparisonPageTests(TestCase):
                 "Sixes",
                 "Dot-ball %",
             ],
+        )
+        self.assertEqual(
+            [axis["higher_is_better"] for axis in batting_axes],
+            [True, True, True, True, True, False],
+        )
+        self.assertEqual(
+            [
+                axis["higher_is_better"]
+                for axis in by_id[player_ids[0]]["radar"]["bowling"]["axes"]
+            ],
+            [True, False, False, False, True, True],
         )
         runs_axis = batting_axes[0]
         expected_normalized_runs = (

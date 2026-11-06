@@ -443,7 +443,7 @@
                 class: "radar-axis-label",
                 "text-anchor": "middle",
             });
-            label.textContent = axis.label;
+            label.textContent = `${axis.label} ${axis.higher_is_better ? "↑" : "↓"}`;
             svg.append(label);
         });
 

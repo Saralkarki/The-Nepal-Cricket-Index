@@ -2,13 +2,18 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile_development
-    env_file:
-      - .env
+      dockerfile: Dockerfile
     environment:
-      DJANGO_SECURE_DEPLOYMENT: "false"
-    ports:
-      - "127.0.0.1:8000:8000"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?Set DJANGO_ALLOWED_HOSTS}
+      DJANGO_SECURE_DEPLOYMENT: "true"
+      DJANGO_DEBUG: "false"
+    expose:
+      - "8000"
     volumes:
-      - .:/app
-    command: python manage.py runserver 0.0.0.0:8000
+      - type: bind
+        source: ${CRICKET_DB_PATH:?Set CRICKET_DB_PATH to the database file}
+        target: /app/data/nepal_cricket.db
+        read_only: true
+        bind:
+          create_host_path: false

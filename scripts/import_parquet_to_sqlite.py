@@ -622,9 +622,7 @@ def parse_player_of_match(value: Any, match_id: str) -> list[str]:
             f"player_of_match for match {match_id} must be a name or list"
         )
     if not recipients:
-        raise ImportValidationError(
-            f"player_of_match has no recipients for match {match_id}"
-        )
+        return []
     names = [text_value(name, f"player_of_match for match {match_id}") for name in recipients]
     if len(set(names)) != len(names):
         raise ImportValidationError(

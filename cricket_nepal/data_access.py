@@ -7,6 +7,7 @@ from django.utils.text import slugify
 
 
 CRICKET_DATABASE = "cricket"
+ABANDONED_MATCH_IDS = {"1558588"}
 TEAM_NAME_ALIASES = {
     "Kathmandu Gorkhas": ("Kathmandu Gorkhas", "Kathmandu Gurkhas"),
 }
@@ -167,15 +168,22 @@ def _npl_points_table(
         fixtures_by_pair.setdefault(pair, []).append(match)
 
     expected_round_robin_fixtures = len(teams) * (len(teams) - 1) // 2
-    if (
-        len(fixtures_by_pair) != expected_round_robin_fixtures
-        or len(group_matches) != expected_round_robin_fixtures
-        or any(len(fixtures) != 1 for fixtures in fixtures_by_pair.values())
-    ):
+    if not group_matches:
         return (
             None,
-            "Exactly one league-stage match for every team pairing is required to derive the points table.",
+            "No league-stage matches are available to derive the points table.",
         )
+    if any(len(fixtures) != 1 for fixtures in fixtures_by_pair.values()):
+        return (
+            None,
+            "Multiple league-stage matches for a team pairing prevent a reliable points table.",
+        )
+    limitation = (
+        "Provisional standings based on the recorded league-stage matches; "
+        "not all team pairings are present in the data."
+        if len(fixtures_by_pair) != expected_round_robin_fixtures
+        else None
+    )
 
     table = {
         team_name: {
@@ -267,7 +275,7 @@ def _npl_points_table(
             row["team_name"],
         )
     )
-    return rows, None
+    return rows, limitation
 
 
 def get_npl_tournament_overview(
@@ -1545,7 +1553,10 @@ def get_matches(
             """,
             [tournament_id, team_name, team_name, team_name],
         )
-        return _rows_as_dicts(cursor)
+        matches = _rows_as_dicts(cursor)
+        for match in matches:
+            match["is_abandoned"] = match["match_id"] in ABANDONED_MATCH_IDS
+        return matches
 
 
 def get_match_scorecard(match_id: str) -> dict[str, Any] | None:
@@ -1573,6 +1584,7 @@ def get_match_scorecard(match_id: str) -> dict[str, Any] | None:
             return None
 
         match = matches[0]
+        match["is_abandoned"] = match["match_id"] in ABANDONED_MATCH_IDS
         match["team_1_slug"] = slugify(_canonical_team_name(match["team_1_name"]))
         match["team_2_slug"] = slugify(_canonical_team_name(match["team_2_name"]))
         match["winner_slug"] = (

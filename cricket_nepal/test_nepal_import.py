@@ -102,7 +102,7 @@ class NepalParquetImportTests(TestCase):
                     connection.execute(
                         "SELECT COUNT(*) FROM players"
                     ).fetchone()[0],
-                    193,
+                    226,
                 )
 
             second_counts = import_nepal_data(database_path, ROOT / "data" / "nepal")

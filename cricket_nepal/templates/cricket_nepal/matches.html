@@ -62,6 +62,8 @@
                     {% if match.margin and match.margin_type %}
                     <span class="match-margin">by {{ match.margin }} {{ match.margin_type }}</span>
                     {% endif %}
+                    {% elif match.is_abandoned %}
+                    <span class="match-no-result">Abandoned without a ball bowled</span>
                     {% else %}
                     <span class="match-no-result">Result unavailable</span>
                     {% endif %}

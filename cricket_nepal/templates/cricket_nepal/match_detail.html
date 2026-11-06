@@ -26,6 +26,8 @@
                 {% if match.winner_slug %}<a class="match-team-profile-link" href="{% url 'cricket_nepal:team_profile' match.winner_slug %}">{{ match.winner_name }}</a>{% else %}{{ match.winner_name }}{% endif %} won
                 {% if match.margin and match.margin_type %}by {{ match.margin }} {{ match.margin_type }}{% endif %}
             </p>
+            {% elif match.is_abandoned %}
+            <p class="match-detail-result">Match abandoned without a ball bowled</p>
             {% else %}
             <p class="match-detail-result">Result unavailable</p>
             {% endif %}
@@ -161,6 +163,8 @@
                 </div>
             </article>
             {% endfor %}
+        {% elif match.is_abandoned %}
+        <p class="scorecard-unavailable innings-empty">Match abandoned without a ball bowled.</p>
         {% else %}
         <p class="scorecard-unavailable innings-empty">No innings summary is available for this match.</p>
         {% endif %}

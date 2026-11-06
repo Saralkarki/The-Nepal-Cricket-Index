@@ -97,7 +97,7 @@
         {% if overview.points_table %}
         <div class="team-table-scroll">
             <table class="npl-points-table">
-                <thead><tr><th>Team</th><th>Played</th><th>Won</th><th>Lost</th><th>Points</th><th>NRR</th></tr></thead>
+                <thead><tr><th>Team</th><th>Played</th><th>Won</th><th>Lost</th><th>Tied</th><th>No result</th><th>Points</th><th>NRR</th></tr></thead>
                 <tbody>
                     {% for row in overview.points_table %}
                     <tr>
@@ -105,6 +105,8 @@
                         <td>{{ row.played }}</td>
                         <td>{{ row.won }}</td>
                         <td>{{ row.lost }}</td>
+                        <td>{{ row.tied }}</td>
+                        <td>{{ row.no_result }}</td>
                         <td>{{ row.points }}</td>
                         <td>{{ row.net_run_rate|floatformat:3 }}</td>
                     </tr>
@@ -112,6 +114,9 @@
                 </tbody>
             </table>
         </div>
+        {% if overview.points_table_limitation %}
+        <p class="team-qualification-note">{{ overview.points_table_limitation }}</p>
+        {% endif %}
         <p class="team-qualification-note">NRR uses matches labelled League Stage or Round Robin: aggregate runs per over scored minus aggregate runs per over conceded. All-out innings count as the full 20-over quota; super overs and no-result matches are excluded. NPL-specific playing conditions for shortened innings are not available, so the standard T20 convention is used.</p>
         {% else %}
         <p class="player-empty-state">{{ overview.points_table_limitation }}</p>
@@ -259,6 +264,7 @@
                 </tbody>
             </table>
         </div>
+        <p class="player-muted">Batting dot-ball % is batting dots divided by balls faced; bowling dot-ball % is bowling dots divided by legal balls bowled. The scorecards provide separate dot-ball counts, so the percentages can differ.</p>
     </section>
 </section>
 {% endblock %}

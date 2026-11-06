@@ -19,6 +19,18 @@ from cricket_nepal.data_access import (
 from scripts.import_parquet_to_sqlite import read_source_data, rebuild_database
 
 
+def get_tournament_with_batting_stats():
+    return next(
+        tournament
+        for tournament in get_tournaments()
+        if get_player_statistics(
+            tournament_name=tournament["tournament_name"],
+            season=tournament["season"],
+            minimum_matches=0,
+        )["batting"]
+    )
+
+
 class MatchPlayersImportTests(SimpleTestCase):
     def test_import_preserves_match_player_rows_and_null_attributes(self):
         source_dir = Path(__file__).resolve().parents[1] / "data" / "npl"
@@ -60,9 +72,9 @@ class MatchPlayersImportTests(SimpleTestCase):
                     connection.execute("SELECT match_id, stage_order FROM matches")
                 )
 
-        self.assertEqual(row_count, 1408)
-        self.assertEqual(player_count, 193)
-        self.assertEqual(null_counts, (1408, 1408, 1408))
+        self.assertEqual(row_count, 1672)
+        self.assertEqual(player_count, 226)
+        self.assertEqual(null_counts, (1672, 1672, 1672))
         self.assertIn("stage", match_columns)
         self.assertEqual(
             imported_stages,
@@ -749,6 +761,12 @@ class HomepageTests(SimpleTestCase):
         self.assertContains(response, "All NPL seasons")
         self.assertContains(response, "<dt>Fours</dt><dd>12</dd>")
         self.assertContains(response, "<dt>Sixes</dt><dd>4</dd>")
+        self.assertContains(
+            response,
+            "Batting dot-ball % is batting dots divided by balls faced; "
+            "bowling dot-ball % is bowling dots divided by legal balls bowled. "
+            "The scorecards provide separate dot-ball counts, so the percentages can differ.",
+        )
         self.assertNotContains(response, "Points table")
 
     def test_npl_overview_selects_requested_season(self):
@@ -774,6 +792,35 @@ class HomepageTests(SimpleTestCase):
             response,
             f'href="{reverse("cricket_nepal:teams")}?season_id=1783"',
         )
+
+    def test_npl_overview_shows_provisional_points_table_and_no_results(self):
+        overview = self._overview()
+        overview["points_table"] = [
+            {
+                "team_name": "Chitwan Rhinos",
+                "team_slug": "chitwan-rhinos",
+                "played": 3,
+                "won": 1,
+                "lost": 1,
+                "tied": 0,
+                "no_result": 1,
+                "points": 3,
+                "net_run_rate": -0.486,
+            }
+        ]
+        overview["points_table_limitation"] = "Provisional standings based on recorded matches."
+        with (
+            patch("cricket_nepal.views.get_tournaments", return_value=self.tournaments),
+            patch(
+                "cricket_nepal.views.get_npl_tournament_overview",
+                return_value=overview,
+            ),
+        ):
+            response = self.client.get(self._overview_url(), {"season_id": "1783"})
+        self.assertContains(response, "Chitwan Rhinos")
+        self.assertContains(response, "Provisional standings based on recorded matches.")
+        self.assertContains(response, "<th>No result</th>")
+        self.assertContains(response, "<th>Tied</th>")
 
     def test_npl_overview_invalid_season_falls_back_to_overall(self):
         with (
@@ -971,6 +1018,29 @@ class NplPointsTableTests(SimpleTestCase):
 
         self.assertIsNone(table)
         self.assertIn("stage labels are incomplete", limitation)
+
+    def test_partial_league_standings_are_marked_provisional(self):
+        matches = [
+            {"match_id": "1", "stage": "League Stage", "team_1_name": "A", "team_2_name": "B", "winner_name": "A"},
+            {"match_id": "2", "stage": "League Stage", "team_1_name": "B", "team_2_name": "C", "winner_name": None},
+        ]
+        table, limitation = _npl_points_table(matches, {})
+        by_team = {row["team_name"]: row for row in table}
+        self.assertIn("Provisional standings", limitation)
+        self.assertEqual(by_team["A"]["points"], 2)
+        self.assertEqual(by_team["B"]["played"], 2)
+        self.assertEqual(by_team["B"]["no_result"], 1)
+        self.assertEqual(by_team["B"]["points"], 1)
+        self.assertEqual(by_team["C"]["points"], 1)
+
+    def test_duplicate_pairings_do_not_produce_standings(self):
+        matches = [
+            {"match_id": "1", "stage": "League Stage", "team_1_name": "A", "team_2_name": "B", "winner_name": "A"},
+            {"match_id": "2", "stage": "League Stage", "team_1_name": "B", "team_2_name": "A", "winner_name": "B"},
+        ]
+        table, limitation = _npl_points_table(matches, {})
+        self.assertIsNone(table)
+        self.assertIn("Multiple league-stage matches", limitation)
 
 
 class MatchesPageTests(SimpleTestCase):
@@ -2451,7 +2521,7 @@ class PlayerStatisticsPageTests(TestCase):
         self.assertAlmostEqual(bowling_row["strike_rate"], bowling["strike_rate"])
 
     def test_tournament_and_season_filters_match_profile_season_totals(self):
-        tournament = get_tournaments()[0]
+        tournament = get_tournament_with_batting_stats()
         statistics = get_player_statistics(
             tournament_name=tournament["tournament_name"],
             season=tournament["season"],
@@ -2751,7 +2821,7 @@ class PlayerStatisticsPageTests(TestCase):
         self.assertNotIn("fielding_stats_by_match", list_tables())
 
     def test_fielding_page_uses_dynamic_filters_and_preserves_filter_state(self):
-        tournament = get_tournaments()[0]
+        tournament = get_tournament_with_batting_stats()
         metadata = get_player_statistics(
             tournament_name=tournament["tournament_name"],
             season=tournament["season"],
@@ -2969,7 +3039,7 @@ class PlayerComparisonPageTests(TestCase):
         )
 
     def test_comparison_radar_uses_the_current_filter_cohort(self):
-        tournament = get_tournaments()[0]
+        tournament = get_tournament_with_batting_stats()
         statistics = get_player_statistics(
             tournament_name=tournament["tournament_name"],
             season=tournament["season"],
@@ -3107,7 +3177,7 @@ class PlayerComparisonPageTests(TestCase):
         )
 
     def test_comparison_filters_apply_and_recalculate_selected_scope(self):
-        tournament = get_tournaments()[0]
+        tournament = get_tournament_with_batting_stats()
         scoped_stats = get_player_statistics(
             tournament_name=tournament["tournament_name"],
             season=tournament["season"],

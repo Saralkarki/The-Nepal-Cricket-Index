@@ -2,10 +2,13 @@ services:
   web:
     build:
       context: .
+      dockerfile: Dockerfile_development
     env_file:
       - .env
+    environment:
+      DJANGO_SECURE_DEPLOYMENT: "false"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - .:/app
     command: python manage.py runserver 0.0.0.0:8000

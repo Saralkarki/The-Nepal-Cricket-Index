@@ -21,6 +21,11 @@ venv/
 env/
 
 # Django and local databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.parquet
 *.sqlite3
 *.sqlite3-journal
 db.sqlite3

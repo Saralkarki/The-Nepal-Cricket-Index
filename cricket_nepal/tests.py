@@ -13,6 +13,7 @@ from cricket_nepal.data_access import (
     list_tables,
     get_player_profile,
     get_player_statistics,
+    get_npl_player_directory,
     get_tournaments,
     _npl_points_table,
 )
@@ -23,7 +24,8 @@ def get_tournament_with_batting_stats():
     return next(
         tournament
         for tournament in get_tournaments()
-        if get_player_statistics(
+        if tournament["tournament_name"] == "Nepal Premier League"
+        and get_player_statistics(
             tournament_name=tournament["tournament_name"],
             season=tournament["season"],
             minimum_matches=0,
@@ -1309,7 +1311,7 @@ class PlayerDirectoryTests(SimpleTestCase):
         )
 
     def test_header_separates_npl_menu_from_national_team_and_groups_player_tools(self):
-        with patch("cricket_nepal.views.get_player_directory", return_value=[]):
+        with patch("cricket_nepal.views.get_npl_player_directory", return_value={"players": []}):
             response = self.client.get(reverse("cricket_nepal:players"))
 
         self.assertEqual(response.status_code, 200)
@@ -1397,7 +1399,7 @@ class PlayerDirectoryTests(SimpleTestCase):
                 ],
             }
         ]
-        with patch("cricket_nepal.views.get_player_directory", return_value=players):
+        with patch("cricket_nepal.views.get_npl_player_directory", return_value={"players": players}):
             response = self.client.get(reverse("cricket_nepal:players"))
 
         self.assertEqual(response.status_code, 200)
@@ -1408,14 +1410,67 @@ class PlayerDirectoryTests(SimpleTestCase):
 
     def test_directory_search_is_trimmed_and_passed_to_query(self):
         with patch(
-            "cricket_nepal.views.get_player_directory", return_value=[]
+            "cricket_nepal.views.get_npl_player_directory", return_value={"players": []}
         ) as directory_query:
             response = self.client.get(reverse("cricket_nepal:players"), {"q": "  Milan  "})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["search_term"], "Milan")
-        directory_query.assert_called_once_with("Milan")
+        directory_query.assert_called_once_with(
+            search_term="Milan", tournament_name="", season="", team_name=""
+        )
         self.assertContains(response, "No players match")
+
+    def test_npl_directory_combines_filters_and_preserves_selection(self):
+        options = [
+            {"player_id": 1, "player_name": "A Player", "season": "2025/26", "team_name": "Kathmandu Gorkhas"},
+            {"player_id": 1, "player_name": "A Player", "season": "2024/25", "team_name": "Biratnagar Kings"},
+            {"player_id": 2, "player_name": "Another Player", "season": "2024/25", "team_name": "Kathmandu Gorkhas"},
+            {"player_id": 3, "player_name": "Third Player", "season": "2025/26", "team_name": "Biratnagar Kings"},
+        ]
+        with patch("cricket_nepal.data_access.get_npl_comparison_player_options", return_value=options):
+            response = self.client.get(
+                reverse("cricket_nepal:players"),
+                {"tournament": "Nepal Premier League", "season": "2025/26",
+                 "team": "Kathmandu Gurkhas", "q": " player "},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response.context["players"],
+                [{"player_id": 1, "player_name": "A Player", "participations": [
+                    {"season": "2025/26", "teams": ["Kathmandu Gorkhas"]},
+                ]}],
+            )
+            self.assertContains(response, '<option value="Nepal Premier League" selected>')
+            self.assertContains(response, '<option value="2025/26" selected>')
+            self.assertContains(response, '<option value="Kathmandu Gorkhas" selected>')
+            self.assertContains(response, 'value="player"')
+            self.assertNotContains(response, "Another Player")
+            self.assertNotContains(response, "Third Player")
+
+            empty = self.client.get(
+                reverse("cricket_nepal:players"),
+                {"season": "2025/26", "team": "Kathmandu Gorkhas", "q": "absent"},
+            )
+            self.assertContains(empty, "No players match the selected filters.")
+            self.assertContains(empty, "Clear filters")
+
+            all_players = get_npl_player_directory()
+            self.assertEqual(len(all_players["players"]), 3)
+            self.assertEqual(len(all_players["players"][0]["participations"]), 2)
+            self.assertEqual(all_players["tournament_options"], ["Nepal Premier League"])
+            self.assertEqual(all_players["season_options"], ["2025/26", "2024/25"])
+            self.assertEqual(all_players["team_options"], ["Biratnagar Kings", "Kathmandu Gorkhas"])
+
+    def test_npl_directory_rejects_unknown_filter_values(self):
+        with patch("cricket_nepal.data_access.get_npl_comparison_player_options", return_value=[]):
+            result = get_npl_player_directory(
+                tournament_name="Other", season="unknown", team_name="unknown"
+            )
+        self.assertEqual(result["players"], [])
+        self.assertEqual(result["selected_tournament"], "")
+        self.assertEqual(result["selected_season"], "")
+        self.assertEqual(result["selected_team"], "")
 
 
 class TeamDirectoryTests(SimpleTestCase):
@@ -2512,6 +2567,44 @@ class PlayerProfileTests(SimpleTestCase):
 
 
 class PlayerStatisticsPageTests(TestCase):
+    def test_npl_statistics_pages_exclude_other_tournaments(self):
+        npl = "Nepal Premier League"
+        other = next(
+            row["tournament_name"]
+            for row in get_tournaments()
+            if row["tournament_name"] != npl
+        )
+        expected = get_player_statistics(tournament_name=npl, minimum_matches=0)
+        for page in (
+            "player_statistics_batting",
+            "player_statistics_bowling",
+            "player_statistics_fielding",
+        ):
+            for params in (
+                {"minimum_matches": "0"},
+                {"minimum_matches": "0", "tournament": other},
+            ):
+                with self.subTest(page=page, params=params):
+                    response = Client().get(reverse(f"cricket_nepal:{page}"), params)
+                    self.assertEqual(response.status_code, 200)
+                    stats = response.context["statistics"]
+                    self.assertEqual(stats["tournament_options"], [npl])
+                    self.assertEqual(stats["season_options"], expected["season_options"])
+                    self.assertEqual(stats["team_options"], expected["team_options"])
+                    self.assertNotIn(
+                        f'<option value="{other}">', response.content.decode()
+                    )
+                    if page != "player_statistics_fielding":
+                        self.assertEqual(stats["batting"], expected["batting"])
+                        self.assertEqual(stats["bowling"], expected["bowling"])
+                        self.assertEqual(
+                            stats["best_performances"], expected["best_performances"]
+                        )
+
+        response = Client().get(reverse("cricket_nepal:player_comparison_data"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["filters"]["tournament_options"], [npl])
+
     def test_overall_rates_match_existing_player_profile_aggregates(self):
         statistics = get_player_statistics(minimum_matches=0)
         multi_season_player = next(
@@ -2933,7 +3026,7 @@ class PlayerStatisticsPageTests(TestCase):
         self.assertEqual(statistics["selected_team"], "")
         self.assertEqual(
             set(statistics["tournament_options"]),
-            {tournament["tournament_name"] for tournament in get_tournaments()},
+            {"Nepal Premier League"},
         )
         self.assertTrue(statistics["batting"])
         self.assertTrue(

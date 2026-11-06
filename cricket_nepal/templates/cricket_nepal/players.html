@@ -10,17 +10,48 @@
         <p class="section-intro">Explore player records, season statistics and match-by-match performances.</p>
     </header>
 
-    <form class="player-search" method="get" action="{% url 'cricket_nepal:players' %}">
-        <label for="player-search">Search by player name</label>
-        <div class="player-search-controls">
-            <input id="player-search" type="search" name="q" value="{{ search_term }}" placeholder="Enter a player name">
-            <button type="submit">Search</button>
-            {% if search_term %}<a href="{% url 'cricket_nepal:players' %}">Clear</a>{% endif %}
+    <form class="player-statistics-filters" method="get" action="{% url 'cricket_nepal:players' %}" aria-label="Filter NPL players">
+        <div class="player-statistics-filter-grid">
+            <label>
+                Tournament
+                <select name="tournament">
+                    <option value="">All NPL tournaments</option>
+                    {% for tournament in tournament_options %}
+                    <option value="{{ tournament }}"{% if selected_tournament == tournament %} selected{% endif %}>{{ tournament }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Season
+                <select name="season">
+                    <option value="">All seasons</option>
+                    {% for season in season_options %}
+                    <option value="{{ season }}"{% if selected_season == season %} selected{% endif %}>{{ season }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Club
+                <select name="team">
+                    <option value="">All clubs</option>
+                    {% for team in team_options %}
+                    <option value="{{ team }}"{% if selected_team == team %} selected{% endif %}>{{ team }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Search by player name
+                <input id="player-search" type="search" name="q" value="{{ search_term }}" placeholder="Enter a player name">
+            </label>
+        </div>
+        <div class="player-statistics-filter-actions">
+            <button type="submit">Apply filters</button>
+            <a href="{% url 'cricket_nepal:players' %}">Clear filters</a>
         </div>
     </form>
 
     <div class="player-directory-heading">
-        <h2>{% if search_term %}Search results{% else %}All players{% endif %}</h2>
+        <h2>{% if search_term or selected_tournament or selected_season or selected_team %}Filtered players{% else %}All players{% endif %}</h2>
         <span>{{ players|length }} player{{ players|length|pluralize }}</span>
     </div>
 
@@ -48,7 +79,7 @@
         {% endfor %}
     </div>
     {% else %}
-    <p class="player-empty-state">No players match “{{ search_term }}”.</p>
+    <p class="player-empty-state">No players match the selected filters.</p>
     {% endif %}
 </section>
 {% endblock %}

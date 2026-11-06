@@ -7,6 +7,7 @@ from django.utils.text import slugify
 
 
 CRICKET_DATABASE = "cricket"
+NPL_TOURNAMENT_NAME = "Nepal Premier League"
 ABANDONED_MATCH_IDS = {"1558588"}
 TEAM_NAME_ALIASES = {
     "Kathmandu Gorkhas": ("Kathmandu Gorkhas", "Kathmandu Gurkhas"),
@@ -1707,6 +1708,7 @@ def _player_statistics_scope(
 ) -> tuple[str, list[Any]]:
     team_filter = ""
     params: list[Any] = [
+        NPL_TOURNAMENT_NAME,
         tournament_name,
         tournament_name,
         season,
@@ -1731,7 +1733,8 @@ def _player_statistics_scope(
         WITH selected_tournaments AS (
             SELECT tournament_id, tournament_name, season
             FROM tournaments
-            WHERE (%s = '' OR tournament_name = %s)
+            WHERE tournament_name = %s
+              AND (%s = '' OR tournament_name = %s)
               AND (%s = '' OR season = %s)
         ),
         scoped_match_players AS (
@@ -1822,7 +1825,10 @@ def get_player_statistics(
     match_scoped_stats: bool = False,
 ) -> dict[str, Any]:
     minimum_matches = max(0, minimum_matches)
-    tournaments = get_tournaments()
+    tournaments = [
+        row for row in get_tournaments()
+        if row["tournament_name"] == NPL_TOURNAMENT_NAME
+    ]
     tournament_options = sorted(
         {row["tournament_name"] for row in tournaments},
         key=str.casefold,
@@ -1846,11 +1852,12 @@ def get_player_statistics(
             SELECT DISTINCT mp.team_name
             FROM match_players AS mp
             JOIN tournaments AS t ON t.tournament_id = mp.tournament_id
-            WHERE (%s = '' OR t.tournament_name = %s)
+            WHERE t.tournament_name = %s
+              AND (%s = '' OR t.tournament_name = %s)
               AND (%s = '' OR t.season = %s)
             ORDER BY lower(mp.team_name), mp.team_name
             """,
-            [tournament_name, tournament_name, season, season],
+            [NPL_TOURNAMENT_NAME, tournament_name, tournament_name, season, season],
         )
         raw_team_options = [row[0] for row in cursor.fetchall()]
 
@@ -2351,12 +2358,79 @@ def get_npl_comparison_player_options() -> list[dict[str, Any]]:
             WHERE t.tournament_name = %s
             ORDER BY lower(p.player_name), p.player_id, t.season DESC, pt.team_name
             """,
-            ["Nepal Premier League"],
+            [NPL_TOURNAMENT_NAME],
         )
         rows = _rows_as_dicts(cursor)
     for row in rows:
         row["team_name"] = _canonical_team_name(row["team_name"])
     return rows
+
+
+def get_npl_player_directory(
+    search_term: str = "",
+    tournament_name: str = "",
+    season: str = "",
+    team_name: str = "",
+) -> dict[str, Any]:
+    options = get_npl_comparison_player_options()
+    season_options = sorted(
+        {row["season"] for row in options if row["season"]}, reverse=True
+    )
+    team_options = sorted(
+        {row["team_name"] for row in options if row["team_name"]}, key=str.casefold
+    )
+    tournament_options = [NPL_TOURNAMENT_NAME] if options else []
+    selected_tournament = tournament_name if tournament_name in tournament_options else ""
+    selected_season = season if season in season_options else ""
+    selected_team = _canonical_team_name(team_name)
+    if selected_team not in team_options:
+        selected_team = ""
+
+    players_by_id: dict[int, dict[str, Any]] = {}
+    for row in options:
+        if (
+            search_term.casefold() not in row["player_name"].casefold()
+            or (selected_season and row["season"] != selected_season)
+            or (selected_team and row["team_name"] != selected_team)
+        ):
+            continue
+        player = players_by_id.setdefault(
+            row["player_id"],
+            {
+                "player_id": row["player_id"],
+                "player_name": row["player_name"],
+                "participations": {},
+            },
+        )
+        teams = player["participations"].setdefault(row["season"] or "", set())
+        if row["team_name"]:
+            teams.add(row["team_name"])
+
+    players = []
+    for player in players_by_id.values():
+        participations = [
+            {"season": player_season, "teams": sorted(teams, key=str.casefold)}
+            for player_season, teams in sorted(
+                player["participations"].items(), reverse=True
+            )
+        ]
+        players.append(
+            {
+                "player_id": player["player_id"],
+                "player_name": player["player_name"],
+                "participations": participations,
+            }
+        )
+
+    return {
+        "players": players,
+        "tournament_options": tournament_options,
+        "season_options": season_options,
+        "team_options": team_options,
+        "selected_tournament": selected_tournament,
+        "selected_season": selected_season,
+        "selected_team": selected_team,
+    }
 
 
 def get_player_directory(search_term: str = "") -> list[dict[str, Any]]:

@@ -7,7 +7,7 @@ from cricket_nepal.data_access import (
     get_team_directory,
     get_npl_team_directory,
     get_team_profile,
-    get_player_directory,
+    get_npl_player_directory,
     get_npl_comparison_player_options,
     get_player_names,
     get_player_statistics,
@@ -458,11 +458,17 @@ def matches(request):
 
 def players(request):
     search_term = request.GET.get("q", "").strip()[:100]
+    directory = get_npl_player_directory(
+        search_term=search_term,
+        tournament_name=request.GET.get("tournament", "").strip()[:100],
+        season=request.GET.get("season", "").strip()[:30],
+        team_name=request.GET.get("team", "").strip()[:100],
+    )
     return render(
         request,
         "cricket_nepal/players.html",
         {
-            "players": get_player_directory(search_term),
+            **directory,
             "search_term": search_term,
         },
     )
